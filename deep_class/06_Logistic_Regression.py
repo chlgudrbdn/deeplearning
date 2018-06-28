@@ -8,7 +8,7 @@ x_data = [x_row[0] for x_row in data]
 y_data = [y_row[1] for y_row in data]
 
 # a와 b의 값을 임의로 정함
-a = tf.Variable(tf.random_normal([1], dtype=tf.float64, seed=0))
+a = tf.Variable(tf.random_normal([1], dtype=tf.float64, seed=0))# 딱히 범주는 안정함.
 b = tf.Variable(tf.random_normal([1], dtype=tf.float64, seed=0))
 
 # y 시그모이드 함수의 방정식을 세움

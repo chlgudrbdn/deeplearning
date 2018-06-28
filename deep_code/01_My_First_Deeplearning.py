@@ -18,17 +18,16 @@ tf.set_random_seed(seed)
 Data_set = numpy.loadtxt("../dataset/ThoraricSurgery.csv", delimiter=",")
 
 # 환자의 기록과 수술 결과를 X와 Y로 구분하여 저장합니다.
-X = Data_set[:,0:17]
+X = Data_set[:,0:17] # 모든 행 : , 0~17사이 열
 Y = Data_set[:,17]
 
 # 딥러닝 구조를 결정합니다(모델을 설정하고 실행하는 부분입니다).
-model = Sequential()
-model.add(Dense(30, input_dim=17, activation='relu'))
-model.add(Dense(1, activation='sigmoid'))
+model = Sequential() # 구조를 쌓아갈 수 있도록 하는 함수. 이후에 add함수를 쓰면 층이 추가됨.
+model.add(Dense(30, input_dim=17, activation='relu'))# Dense 함수는 조밀하게 모여있는 집합을 의미.
+model.add(Dense(1, activation='sigmoid'))# activation:다음 층으로 넘기는 방법. 활성함수.지정.
 
 # 딥러닝을 실행합니다.
-model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
-model.fit(X, Y, epochs=30, batch_size=10)
+model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])#loss:한변 신경망 실행될 때 마다 오차값 추정 함수, Optimizer: 오차 줄여나갈 방법법model.fit(X, Y, epochs=30, batch_size=10)
 
 # 결과를 출력합니다.
 print("\n Accuracy: %.4f" % (model.evaluate(X, Y)[1]))
