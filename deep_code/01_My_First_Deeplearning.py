@@ -36,6 +36,11 @@ model.fit(X, Y, epochs=30, batch_size=10) # 실행. 1 epochs는 모든 데이터
 # 1epoch=전체데이터 개수/batch size= 470/10=47iteration
 # batch size는 샘플을 몇개씩 끊어서 집어넣는다는 의미. 너무 크면 속도가 느려지고 작으면 실행값의 편차가 생겨 전체 결과값이 불안정해질 수 있다. 메모리가 감당할 수준이어야함.
 
+# ETA는  Estimated Time of Arrival를 의미. loss와 acc는 이 트레이닝 셋에 대한 오차, 정확도값.
+# 맨 마지막은 전체 첫째줄 만큼 샘플을 validation하는 것 같다. [=================]
+# 만약 validation하는데 loss 줄고, acc 느는데 트레이닝은 여전히 별로라면 이건 과적합을 의미.
+# 0s 727us/step는 에코당 걸린 시간 얘기 같다.
+
 # 결과를 출력합니다.
 print("\n Accuracy: %.4f" % (model.evaluate(X, Y)[1]))
 

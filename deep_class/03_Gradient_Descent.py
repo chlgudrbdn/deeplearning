@@ -8,6 +8,7 @@ y_data = [y_row[1] for y_row in data]
 # 기울기 a와 y 절편 b의 값을 임의로 정한다.
 # 단, 기울기의 범위는 0 ~ 10 사이이며 y 절편은 0 ~ 100 사이에서 변하게 한다.
 a = tf.Variable(tf.random_uniform([1], 0, 10, dtype = tf.float64, seed = 0))
+#uniform 분포로 숫자 1개 골라라 0~10사이. float64 데이터형으로.
 b = tf.Variable(tf.random_uniform([1], 0, 100, dtype = tf.float64, seed = 0))
 
 # y에 대한 일차 방정식 ax+b의 식을 세운다.
@@ -32,3 +33,4 @@ with tf.Session() as sess:
         # 100번마다 결과 출력
         if step % 100 == 0:
             print("Epoch: %.f, RMSE = %.04f, 기울기 a = %.4f, y 절편 b = %.4f" % (step,sess.run(rmse),sess.run(a),sess.run(b)))
+# Epoch = step

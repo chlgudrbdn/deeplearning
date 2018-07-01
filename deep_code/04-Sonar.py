@@ -13,13 +13,13 @@ tf.set_random_seed(seed)
 
 # 데이터 입력
 df = pd.read_csv('../dataset/sonar.csv', header=None)
-'''
+
 # 데이터 개괄 보기
 print(df.info())
 
 # 데이터의 일부분 미리 보기
 print(df.head())
-'''
+
 dataset = df.values
 X = dataset[:,0:60]
 Y_obj = dataset[:,60]

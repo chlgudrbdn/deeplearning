@@ -29,13 +29,13 @@ Y_obj = dataset[:,4]
 # 문자열을 숫자로 변환
 e = LabelEncoder()
 e.fit(Y_obj)
-Y = e.transform(Y_obj)
-Y_encoded = np_utils.to_categorical(Y)
+Y = e.transform(Y_obj) # 3개의 문자 카테고리가 1,2,3 느낌으로 바뀜.
+Y_encoded = np_utils.to_categorical(Y) #100, 010, 001 로 바꿔주는 걸 원-핫 인코딩이라 부른다.
 
 # 모델의 설정
 model = Sequential()
 model.add(Dense(16,  input_dim=4, activation='relu'))
-model.add(Dense(3, activation='softmax'))
+model.add(Dense(3, activation='softmax')) # 3개의 결과의 총합이 1인. 교차 엔트로피를 지나면 하나만 1이고 나머진 0인 형태로 전환이 가능.
 
 # 모델 컴파일
 model.compile(loss='categorical_crossentropy',

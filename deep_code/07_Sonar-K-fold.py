@@ -30,7 +30,7 @@ skf = StratifiedKFold(n_splits=n_fold, shuffle=True, random_state=seed)
 accuracy = []
 
 # 모델의 설정, 컴파일, 실행
-for train, test in skf.split(X, Y):
+for train, test in skf.split(X, Y): #이하 모델을 학습한 뒤 테스트. train과 test는 리스트.
     model = Sequential()
     model.add(Dense(24, input_dim=60, activation='relu'))
     model.add(Dense(10, activation='relu'))
@@ -39,7 +39,7 @@ for train, test in skf.split(X, Y):
                   optimizer='adam',
                   metrics=['accuracy'])
     model.fit(X[train], Y[train], epochs=100, batch_size=5)
-    k_accuracy = "%.4f" % (model.evaluate(X[test], Y[test])[1])
+    k_accuracy = "%.4f" % (model.evaluate(X[test], Y[test])[1]) # k fold가 항상 좋은 건 아니다. 만약 계층이 정렬되어 있으면 편중되게 추정할 가능성이 큼. 이걸 막으려고 scikit-learn에선 계층별로 또 k겹 교차 검증을 하는 방식을 사용. http://data-newbie.tistory.com/31참고
     accuracy.append(k_accuracy)
 
 # 결과 출력
