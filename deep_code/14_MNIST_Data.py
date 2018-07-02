@@ -17,8 +17,8 @@ tf.set_random_seed(seed)
 
 print("학습셋 이미지 수 : %d 개" % (X_train.shape[0]))  # shape는 행과 열을 튜플로 반환. 여기선 [0]이므로 행만 반환
 print("테스트셋 이미지 수 : %d 개" % (X_test.shape[0]))
-print(X_train[0].flatten())
-print(X_train.shape[0])
+#print(X_train[0].flatten())
+#print(X_train.shape[0])
 # 그래프로 확인
 import matplotlib.pyplot as plt
 plt.imshow(X_train[0], cmap='Greys') # cmap='Greys'는 흑백 출력. 2차원에 숫자 뿐이라 농도로 나타내야해서 그렇다.
