@@ -29,7 +29,7 @@ model.compile(loss='binary_crossentropy',
            metrics=['accuracy'])
 
 # 자동 중단 설정
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=100)
+early_stopping_callback = EarlyStopping(monitor='val_loss', patience=100)# patience는 오차가 좋아지지 않아도 몇번째 까지 기다릴지 정하느 함수.
 
 # 모델 실행
 model.fit(X, Y, validation_split=0.2, epochs=2000, batch_size=500, callbacks=[early_stopping_callback])

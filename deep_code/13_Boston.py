@@ -34,9 +34,9 @@ model.compile(loss='mean_squared_error',
 model.fit(X_train, Y_train, epochs=200, batch_size=10)
 
 # 예측 값과 실제 값의 비교
-Y_prediction = model.predict(X_test).flatten()
+Y_prediction = model.predict(X_test).flatten()  # 데이터 배열이 몇 차원이든 모두 1차원으로 바꿔 읽기 쉽게 해주는 함수
 for i in range(10):
     label = Y_test[i]
     prediction = Y_prediction[i]
     print("실제가격: {:.3f}, 예상가격: {:.3f}".format(label, prediction))
-
+# 여기에 RMSE구하면 된다.
