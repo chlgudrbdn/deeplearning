@@ -29,12 +29,14 @@ x_test = sequence.pad_sequences(x_test, maxlen=100)
 model = Sequential()
 model.add(Embedding(5000, 100))
 model.add(Dropout(0.5))
-model.add(Conv1D(64, 5, padding='valid', activation='relu',strides=1))
+model.add(Conv1D(64, 5, padding='valid', activation='relu',strides=1)) # MNIST_Deep 에선 2차원 행렬 합성곱을 했지만 이경우는 1차원.
+# padding: 바깥에 0을 채워넣냐 마냐.. "valid" 는 패딩 없단 소리. "same" 인풋과 같은 길이의 패딩 0 붙임(길이 조절은 불가). 결과적으로 출력 이미지 사이즈가 입력과 동일. "causal" 확대한 합성곱의 결과. 모델이 시간 순서를 위반해서는 안되는 시간 데이터를 모델링 할 때 유용.
+# strides는 다음칸을 움직이는 칸수 정도로 보면 된다. 2이고 왼쪽에서 오른쪽 2칸 움직이고 다음 행으로 갈 땐 2칸 아래로 가는 식.
 model.add(MaxPooling1D(pool_size=4))
 model.add(LSTM(55))
 model.add(Dense(1))
-model.add(Activation('sigmoid'))
-model.summary()
+model.add(Activation('sigmoid'))  #클래스가 긍부정 뿐이라 원핫 인코딩 과정은 안함.
+model.summary() # 모델 구조를 한 눈에 볼 수 있는 함수.
 
 # 모델의 컴파일
 model.compile(loss='binary_crossentropy',
