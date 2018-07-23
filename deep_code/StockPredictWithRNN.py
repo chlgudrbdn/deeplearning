@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 # 4) input_data_column_cnt(입력데이터의 컬럼 개수)가 적은 경우 stacked RNN을 사용하면 빠르게 Over Fitting된다
 # 5) rnn_cell_hidden_dim(각 셀의 (hidden)출력 크기)가 많은 경우 너무 많으면 오래 걸리고 추가 개선은 거의 없다
 # 6) dropout를 사용할 때 keep_prob에 트레이닝할 때는 0.5~0.7, 테스트할 때는 1.0을 사용하는 것을 잊으면 안된다.
-0000
+
 # 랜덤에 의해 똑같은 결과를 재현하도록 시드 설정
 # 하이퍼파라미터를 튜닝하기 위한 용도(흔들리면 무엇때문에 좋아졌는지 알기 어려움)
 tf.set_random_seed(42)
