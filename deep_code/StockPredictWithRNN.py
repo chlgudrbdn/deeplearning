@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -24,7 +25,7 @@ def data_standardization(x):
 
 
 # 너무 작거나 너무 큰 값이 학습을 방해하는 것을 방지하고자 정규화한다
-# x가 양수라는 가정하에 최소값과 최대값을 이용하여 0~1사이의 값으로 변환
+# # x가 양수라는 가정하에 최소값과 최대값을 이용하여 0~1사이의 값으로 변환
 # Min-Max scaling
 def min_max_scaling(x):
     x_np = np.asarray(x)
@@ -39,11 +40,18 @@ def reverse_min_max_scaling(org_x, x):
     return (x_np * (org_x_np.max() - org_x_np.min() + 1e-7)) + org_x_np.min()
 
 
-# 하이퍼파라미터
-input_data_column_cnt = 6  # 입력데이터의 컬럼 개수(Variable 개수)
-output_data_column_cnt = 1  # 결과데이터의 컬럼 개수
+# 데이터를 로딩한다.
+stock_file_name = "../dataset/full_data_about_iron_ore.csv"  # 철강 데이터 파일
+encoding = 'utf-8'  # 문자 인코딩
+# names = ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+raw_dataframe = pd.read_csv(stock_file_name, header=0, encoding=encoding)  # 판다스이용 csv파일 로딩
+raw_dataframe.info()  # 데이터 정보 출력
 
-seq_length = 28  # 1개 시퀀스의 길이(시계열데이터 입력 개수)
+# 하이퍼파라미터
+input_data_column_cnt = 453  # 입력데이터의 컬럼 개수(Variable 개수)
+output_data_column_cnt = 453  # 결과데이터의 컬럼 개수
+
+seq_length = 5  # 1개 시퀀스의 길이(시계열데이터 입력 개수)
 rnn_cell_hidden_dim = 20  # 각 셀의 (hidden)출력 크기
 forget_bias = 1.0  # 망각편향(기본값 1.0)
 num_stacked_layers = 1  # stacked LSTM layers 개수
@@ -52,12 +60,6 @@ keep_prob = 1.0  # dropout할 때 keep할 비율
 epoch_num = 1000  # 에폭 횟수(학습용전체데이터를 몇 회 반복해서 학습할 것인가 입력)
 learning_rate = 0.01  # 학습률
 
-# 데이터를 로딩한다.
-stock_file_name = "../dataset/housing.csv"  # 아마존 주가데이터 파일
-encoding = 'euc-kr'  # 문자 인코딩
-names = ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
-raw_dataframe = pd.read_csv(stock_file_name, names=names, encoding=encoding)  # 판다스이용 csv파일 로딩
-raw_dataframe.info()  # 데이터 정보 출력
 
 # raw_dataframe.drop('Date', axis=1, inplace=True) # 시간열을 제거하고 dataframe 재생성하지 않기
 del raw_dataframe['Date']  # 위 줄과 같은 효과
