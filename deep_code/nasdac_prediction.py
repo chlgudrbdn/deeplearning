@@ -29,12 +29,12 @@ def create_dataset(dataset, look_back=1):
 numpy.random.seed(7)
 
 # load the dataset
-dataframe = pandas.read_csv('nasdaq100_weekly.csv', usecols=[4], engine='python', skipfooter=3)
+dataframe = pandas.read_csv('date_And_ironorePrice.csv', usecols=[0], engine='python', skipfooter=3)
 dataset = dataframe.values
 
 # delete the commas in the price column (input preprocessing)
-for x in range(len(dataset)):
-    dataset[x][0]=dataset[x][0].replace(",","")
+# for x in range(len(dataset)):
+#     dataset[x][0]=dataset[x][0].replace(",","")
 
 dataset = dataset.astype('float32')
 

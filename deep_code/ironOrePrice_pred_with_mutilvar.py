@@ -31,7 +31,7 @@ numpy.random.seed(42)
 
 # load the dataset
 
-filename = os.getcwd() + '\date_And_ironorePrice.csv'
+filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
 # dataframe = pandas.read_csv(r'../dataset/date_And_ironorePrice.csv', usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 dataframe = pandas.read_csv(filename) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 # dataframe = pandas.read_csv("C:/Users/hyoung-gyu/PycharmProjects/deeplearning/dataset/date_And_ironorePrice.csv", usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.

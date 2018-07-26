@@ -51,7 +51,7 @@ model.add(Dense(1))
 model.compile(loss='mean_squared_error', optimizer='adam')
 
 # 4. 모델 학습시키기
-hist = model.fit(x_train, y_train, epochs=200, batch_size=32, validation_data=(x_val, y_val))
+hist = model.fit(x_train, y_train, epochs=200, batch_size=32, validation_data=(x_val, y_val), verbose=0)
 
 # keras timeseries 5. 학습과정 살펴보기
 plt.plot(hist.history['loss'])
