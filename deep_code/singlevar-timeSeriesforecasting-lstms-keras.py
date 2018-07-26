@@ -21,7 +21,7 @@ start_time = time.time()
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
-    for i in range(len(dataset)-look_back-1): # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프.
+    for i in range(len(dataset)-look_back): # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프. 1을 빼야할 이유는 모르겠다.
         dataX.append(dataset[i:(i+look_back), 0] )  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
         dataY.append(dataset[i + look_back, 0]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return numpy.array(dataX), numpy.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
@@ -66,8 +66,11 @@ n_train = dataset.shape[0]-(forecast_ahead*10)  # 총데이터 샘플 수는 235
 n_records = dataset.shape[0] # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
 average_rmse_list = []
 predictList =[]
+print("n_train %d" % n_train)
+print("n_records %d" % n_records)
 for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어도 35일 이후 값을 알아야함. 휴일 뺀다면 25일.
     print("loop num : %d" % len(average_rmse_list))
+    print("i : %d" % i)
 
     # 모델 저장 폴더 만들기
     MODEL_DIR = './'+filename+'model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
@@ -79,7 +82,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # 학습 자동 중단 설정
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=10)
 
-    train, test = dataset[0:i-forecast_ahead, ], dataset[i-look_back : i+forecast_ahead, ] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
+    train, test = dataset[0:i, ], dataset[i-look_back : i+forecast_ahead, ] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
     print('train=%d, test=%d' % (len(train), len(test)))
     trainX, trainY = create_dataset(train, look_back)
     testX, testY = create_dataset(test, look_back)
@@ -106,12 +109,12 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
+    history=model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
 
-    # pyplot.plot(history.history['loss'], label='train')
-    # pyplot.plot(history.history['val_loss'], label='test')
-    # pyplot.legend()
-    # pyplot.show()
+    pyplot.plot(history.history['loss'], label='train')
+    pyplot.plot(history.history['val_loss'], label='test')
+    pyplot.legend()
+    pyplot.show()
 
     # make predictions
     trainPredict = model.predict(trainX)
@@ -130,15 +133,12 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     print('Test Score: %.2f RMSE' % (testScore))
 
     average_rmse_list.append(testScore)
-    predictList=testPredict
 
 
-
-
-print('average loss list:', end=" ")
-print(average_rmse_list)
+# print('average loss list:', end=" ")
+# print(average_rmse_list)
 print('average loss: %.9f' % numpy.mean(average_rmse_list))
-print(testPredict)
+
 # shift train predictions for plotting
 
 # trainPredictPlot = numpy.empty_like(dataset)
