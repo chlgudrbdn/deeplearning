@@ -22,30 +22,23 @@ start_time = time.time()
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
     for i in range(len(dataset)-look_back-1): # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4
-        a = dataset[i:(i+look_back), 0] # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
-        dataX.append(a)
+        dataX.append(dataset[i:(i+look_back), 0]) # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
         dataY.append(dataset[i + look_back, 0]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return numpy.array(dataX), numpy.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦.
-
 # fix random seed for reproducibility
 numpy.random.seed(42)
-
 # load the dataset
-
-filename = os.getcwd() + '\date_And_ironorePrice.csv'
-# filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
-# dataframe = pandas.read_csv(r'../dataset/date_And_ironorePrice.csv', usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
+# filename = os.getcwd() + '\full_data_about_iron_ore.csv'
+filename = os.getcwd() + '\\dataset\\full_data_about_iron_ore.csv'
 dataframe = pandas.read_csv(filename, usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
-# dataframe = pandas.read_csv("C:/Users/hyoung-gyu/PycharmProjects/deeplearning/dataset/date_And_ironorePrice.csv", usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
-# dataframe = pandas.read_csv('..\dataset\date_And_ironorePrice.csv', usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 
 # normalize the dataset
 scaler = MinMaxScaler(feature_range=(0, 1))
 dataset = scaler.fit_transform(dataset)
-# X = dataset[:, 1:] # 일단 날짜만 갖고 지지고 볶는것이므로 크게 신경쓸 건 없다.
-# Y = dataset[:, 0]
+X = dataset[:, 1:] # 일단 날짜만 갖고 지지고 볶는것이므로 크게 신경쓸 건 없다.
+Y = dataset[:, 0]
 
 
 # hyperparameter tuning section
