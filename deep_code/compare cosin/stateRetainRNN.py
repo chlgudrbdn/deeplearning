@@ -66,7 +66,7 @@ custom_hist.init()
 
 for i in range(200):
     model.fit(x_train, y_train, epochs=1, batch_size=1, shuffle=False, callbacks=[custom_hist],
-              validation_data=(x_val, y_val))
+              validation_data=(x_val, y_val), verbose=0)
     model.reset_states()
 
 # keras timeseries 5. 학습과정 살펴보기

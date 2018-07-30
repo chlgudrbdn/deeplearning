@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 from math import sqrt
+import numpy as np
+import os, sys
+import pandas
 from numpy import concatenate
 from matplotlib import pyplot
 from pandas import read_csv
@@ -12,41 +15,9 @@ from sklearn.metrics import mean_squared_error
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
-
-
-# load data
-def parse(x):
-    return datetime.strptime(x, '%Y %m %d %H')
-
-
-dataset = read_csv('raw.csv', parse_dates=[['year', 'month', 'day', 'hour']], index_col=0, date_parser=parse)
-dataset.drop('No', axis=1, inplace=True)
-# manually specify column names
-dataset.columns = ['pollution', 'dew', 'temp', 'press', 'wnd_dir', 'wnd_spd', 'snow', 'rain']
-dataset.index.name = 'date'
-# mark all NA values with 0
-dataset['pollution'].fillna(0, inplace=True)
-# drop the first 24 hours
-dataset = dataset[24:]
-# summarize first 5 rows
-print(dataset.head(5))
-# save to file
-dataset.to_csv('pollution.csv')
-
-# load dataset
-dataset = read_csv('pollution.csv', header=0, index_col=0)
-values = dataset.values
-# specify columns to plot
-groups = [0, 1, 2, 3, 5, 6, 7]
-i = 1
-# plot each column
-pyplot.figure()
-for group in groups:
-    pyplot.subplot(len(groups), 1, i)
-    pyplot.plot(values[:, group])
-    pyplot.title(dataset.columns[group], y=0.5, loc='right')
-    i += 1
-pyplot.show()
+import time
+start_time = time.time()
+np.random.seed(42)
 
 
 # convert series to supervised learning
@@ -73,27 +44,29 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
         agg.dropna(inplace=True) # dataframe에서 dropna에 inplace=True이면 NA있는 행은 모두 제거.
     return agg
 
+window_size=25 # look_back과 같다
 
 # load dataset
-# dataset = read_csv('pollution.csv', header=0, index_col=0)
-dataset = read_csv('pollution.csv', header=0, index_col=0)
-values = dataset.values
-# integer encode direction # factor라 볼 수 있는 데이터는 걍 숫자로 바꿈.
-encoder = LabelEncoder()
-values[:, 4] = encoder.fit_transform(values[:, 4])
-# ensure all data is float
+# 2. 데이터셋 생성하기
+filename = os.getcwd() + '\date_And_ironorePrice.csv'
+# filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
+# filename = os.getcwd() + '\\full_data_about_iron_ore.csv'
+# filename = os.getcwd() + '\\dataset\\full_data_about_iron_ore.csv'
+dataframe = pandas.read_csv(filename, header=0, index_col=1)
+values = dataframe.values
 values = values.astype('float32')
 # normalize features
 scaler = MinMaxScaler(feature_range=(0, 1))
 scaled = scaler.fit_transform(values)
 # frame as supervised learning
-reframed = series_to_supervised(scaled, 1, 1) # 각 변수들이 어떻게 시간차나는지를 반영할 용량으로 함.
+# reframed = series_to_supervised(scaled, 1, 1) # 각 변수들이 어떻게 시간차나는지를 반영할 용량으로 함.
 # drop columns we don't want to predict
-reframed.drop(reframed.columns[[9, 10, 11, 12, 13, 14, 15]], axis=1, inplace=True)
-print(reframed.head())  # scaled 된 것들.
+# reframed.drop(reframed.columns[[9, 10, 11, 12, 13, 14, 15]], axis=1, inplace=True)
+# print(reframed.head())  # scaled 된 것들.
 
 # split into train and test sets
-values = reframed.values
+# values = reframed.values
+values = scaled
 n_train_hours = 365 * 24
 train = values[:n_train_hours, :]# 1:4 는 1<=x<4 란 의미라 이런식으로 표현
 test = values[n_train_hours:, :]
