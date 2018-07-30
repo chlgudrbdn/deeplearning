@@ -49,8 +49,8 @@ dataset = scaler.fit_transform(dataset)
 
 # hyperparameter tuning section
 number_of_var = len(dataframe.columns)-1 # 종속변수는 뺀다.
-look_back = 30 # 기억력은 30일 전후라고 치자.
-timesteps = 5
+look_back = 25 # 기억력은 30일 전후라고 치자.
+timesteps = 25
 
 forecast_ahead = 25
 # hyperparameter tuning section
@@ -95,8 +95,8 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # reshape into X=t and Y=t+1
 
     # reshape input to be [samples, time steps, features]
-    trainX = numpy.reshape(trainX, (trainX.shape[0], 1, testX.shape[1])) # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
-    testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1])) # 계산을 위해 형을 바꾸는 식. 773
+    trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, testX.shape[1])) # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
+    testX = numpy.reshape(testX, (testX.shape[0], look_back, testX.shape[1])) # 계산을 위해 형을 바꾸는 식. 773
 
     # create and fit the LSTM network
     model = Sequential()
@@ -120,6 +120,30 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     trainY = scaler.inverse_transform([trainY])
     testPredict = scaler.inverse_transform(testPredict)
     testY = scaler.inverse_transform([testY])
+    # 곡 전체 예측
+    # seq_in = x_train[dataset.shape[0]-(window_size*10): dataset.shape[0]-(window_size*10)+window_size, ]
+    # seq_out = seq_in
+    # seq_in_featrues = []
+    # # for si in seq_in:
+    # #     features = code2features(si)
+    # #     seq_in_featrues.append(features)
+    #
+    # for i in range(pred_count):
+    #     sample_in = np.array(seq_in_featrues)
+    #     sample_in = np.reshape(sample_in, (window_size, 4, 2))  # 샘플 수, 타입스텝 수, 속성 수
+    #     pred_out = model.predict(sample_in)
+    #     idx = np.argmax(pred_out)
+    #     seq_out.append(idx2code[idx])
+    #
+    #     seq_in_featrues.append(features)
+    #     seq_in_featrues.pop(0)
+    #     print("seq_in_featrues")
+    #     print(seq_in_featrues)
+    #
+    # model.reset_states()
+    #
+    # print("full song prediction : ", seq_out)
+    #
 
     # calculate root mean squared error
     trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:,0]))

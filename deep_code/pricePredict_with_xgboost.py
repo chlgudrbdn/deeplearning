@@ -13,12 +13,23 @@ from sklearn.feature_selection import SelectFromModel
 import pandas
 
 import time
-
+# import sys
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 start_time = time.time()
 #------------------------
 
+# sourceEncoding = "iso-8859-1"
+# targetEncoding = "utf-8"
+# source = open("source")
+# target = open("target", "w")
+#
+# target.write(unicode(source.read(), sourceEncoding).encode(targetEncoding))
+
 # load data
-dataset = loadtxt('../dataset/full_data_about_iron_ore.csv', delimiter=",", encoding="utf-8", skiprows=1)
+# dataset = loadtxt('../dataset/full_data_about_iron_ore.csv', delimiter=",", encoding="CP1252", skiprows=1)
+# dataset = pandas.read_csv('../dataset/full_data_about_iron_ore.csv', encoding="EUC-KR").values
+dataset = pandas.read_csv('../dataset/full_data_about_iron_ore.csv').values
 # dataset = genfromtxt('../dataset/full_data_about_iron_ore-NA_not_processed.csv', encoding="utf-8", delimiter=",", skip_header=True)[:, 1:]
 # split data into X and y
 X = dataset[:, 1:]
