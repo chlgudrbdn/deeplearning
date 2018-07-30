@@ -109,12 +109,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    history=model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
-
-    pyplot.plot(history.history['loss'], label='train')
-    pyplot.plot(history.history['val_loss'], label='test')
-    pyplot.legend()
-    pyplot.show()
+    history = model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
 
     # make predictions
     trainPredict = model.predict(trainX)
@@ -133,11 +128,95 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     print('Test Score: %.2f RMSE' % (testScore))
 
     average_rmse_list.append(testScore)
-
+    if i == (n_records - forecast_ahead):
+        pyplot.plot(history.history['loss'], label='train')
+        pyplot.plot(history.history['val_loss'], label='test')
+        pyplot.legend()
+        pyplot.show()
 
 # print('average loss list:', end=" ")
 # print(average_rmse_list)
 print('average loss: %.9f' % numpy.mean(average_rmse_list))
+
+print("--- %s seconds ---" %(time.time() - start_time))
+m, s = divmod((time.time() - start_time), 60)
+print("almost %2f minute" % m)
+
+
+##만약 모델이 다른것 보다 rmse가 작아 우수할 경우
+# MODEL_DIR = './'+filename+'model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
+MODEL_DIR = os.getcwd()+'\\'+filename+'model_loopNum'+str(len(average_rmse_list)-1).zfill(2)+'\\'
+modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+file_list = os.listdir(MODEL_DIR)  # 루프 가장 마지막 모델 다시 불러오기.
+file_list.sort()
+print(file_list)
+# del model       # 테스트를 위해 메모리 내의 모델을 삭제
+model = load_model(MODEL_DIR + file_list[0])
+
+short_memory = []
+model.p
+
+# for path, dirs, files in os.walk(MODEL_DIR):
+#     print('\nFolder: ', path)
+#     if files:
+#         for filename in files:
+#             print(' Files: ', os.path.join(path, filename))
+
+
+# # 모델 업데이트 및 저장
+checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+# # 학습 자동 중단 설정
+early_stopping_callback = EarlyStopping(monitor='val_loss', patience=10)
+
+train = dataset[:, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
+# # print('train=%d, test=%d' % (len(train), len(test)))
+trainX, trainY = create_dataset(train, look_back)
+# # testX, testY = create_dataset(test, look_back)
+print('trainX=%d, trainY=%d' % (len(trainX), len(trainY)))
+# # print('testX=%d, testY=%d' % (len(testX), len(testY)))
+
+# reshape input to be [samples, time steps, features]
+trainX = numpy.reshape(trainX, (trainX.shape[0], 1, testX.shape[1])) # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
+# # testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1])) # 계산을 위해 형을 바꾸는 식. 773
+
+# # create and fit the LSTM network
+model = Sequential()
+model.add(LSTM(4, input_shape=(None, look_back)))
+# model.add(LSTM(10, batch_input_shape=(look_back, timesteps, number_of_var), stateful=True))
+# model.add(Dense(5))
+# model.add(Dense(2))
+model.add(Dense(1))
+model.compile(loss='mean_squared_error', optimizer='adam')
+# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
+# model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
+# model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
+history = model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
+#
+# # make predictions
+# trainPredict = model.predict(trainX)
+# testPredict = model.predict(testX)
+#
+# # invert predictions
+# trainPredict = scaler.inverse_transform(trainPredict)
+# trainY = scaler.inverse_transform([trainY])
+# testPredict = scaler.inverse_transform(testPredict)
+# testY = scaler.inverse_transform([testY])
+#
+# # calculate root mean squared error
+# trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:,0]))
+# print('Train Score: %.2f RMSE' % (trainScore))
+# testScore = math.sqrt(mean_squared_error(testY[0], testPredict[:,0]))
+# print('Test Score: %.2f RMSE' % (testScore))
+#
+# average_rmse_list.append(testScore)
+# if i == (n_records- forecast_ahead):
+#     pyplot.plot(history.history['loss'], label='train')
+#     pyplot.plot(history.history['val_loss'], label='test')
+#     pyplot.legend()
+#     pyplot.show()
+
+
+
 
 # shift train predictions for plotting
 
@@ -154,9 +233,6 @@ print('average loss: %.9f' % numpy.mean(average_rmse_list))
 # plt.plot(trainPredictPlot)
 # plt.plot(testPredictPlot)
 
-print("--- %s seconds ---" %(time.time() - start_time))
-m, s = divmod((time.time() - start_time), 60)
-print("almost %2f minute" % m)
 
 # plt.show()
 

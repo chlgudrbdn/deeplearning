@@ -94,13 +94,13 @@ print(reframed.head())  # scaled 된 것들.
 # split into train and test sets
 values = reframed.values
 n_train_hours = 365 * 24
-train = values[:n_train_hours, :]
+train = values[:n_train_hours, :]# 1:4 는 1<=x<4 란 의미라 이런식으로 표현
 test = values[n_train_hours:, :]
 # split into input and outputs
-train_X, train_y = train[:, :-1], train[:, -1]
+train_X, train_y = train[:, :-1], train[:, -1] # -1의 바로 앞까지를 X독립변수. -1행을 종속변수로 훈련에 넣는다.
 test_X, test_y = test[:, :-1], test[:, -1]
 # reshape input to be 3D [samples, timesteps, features]
-train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
+train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))  # 3차원 배열로 바꿔두기
 test_X = test_X.reshape((test_X.shape[0], 1, test_X.shape[1]))
 print(train_X.shape, train_y.shape, test_X.shape, test_y.shape)
 
@@ -110,8 +110,7 @@ model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
 model.add(Dense(1))
 model.compile(loss='mae', optimizer='adam')
 # fit network
-history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2,
-                    shuffle=False)
+history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2, shuffle=False)
 # plot history
 pyplot.plot(history.history['loss'], label='train')
 pyplot.plot(history.history['val_loss'], label='test')
@@ -120,9 +119,9 @@ pyplot.show()
 
 # make a prediction
 yhat = model.predict(test_X)
-test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))
+test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))# testX를 바꿨기 때문에 다시 2차원으로 바꾸는 방식.
 # invert scaling for forecast
-inv_yhat = concatenate((yhat, test_X[:, 1:]), axis=1)
+inv_yhat = concatenate((yhat, test_X[:, 1:]), axis=1) # axis=1은 세로로 결합. 근데 어차피 떼어낼 텐데 합칠이유를 잘 모르겠다.
 inv_yhat = scaler.inverse_transform(inv_yhat)
 inv_yhat = inv_yhat[:, 0]
 # invert scaling for actual
