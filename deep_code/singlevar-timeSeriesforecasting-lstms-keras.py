@@ -30,247 +30,141 @@ def create_dataset(dataset, look_back=1):
 numpy.random.seed(42)
 
 # load the dataset
-
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
 # filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
-# dataframe = pandas.read_csv(r'../dataset/date_And_ironorePrice.csv', usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 dataframe = pandas.read_csv(filename, usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
-# dataframe = pandas.read_csv("C:/Users/hyoung-gyu/PycharmProjects/deeplearning/dataset/date_And_ironorePrice.csv", usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
-# dataframe = pandas.read_csv('..\dataset\date_And_ironorePrice.csv', usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 
 # normalize the dataset
 scaler = MinMaxScaler(feature_range=(0, 1))
 dataset = scaler.fit_transform(dataset)
-# X = dataset[:, 1:] # 일단 날짜만 갖고 지지고 볶는것이므로 크게 신경쓸 건 없다.
-# Y = dataset[:, 0]
-
 
 # hyperparameter tuning section
-number_of_var = len(dataframe.columns)-1 # 종속변수는 뺀다.
-look_back = 25 # 기억력은 30일 전후라고 치자.
-timesteps = 25
-
+number_of_var = len(dataframe.columns)
+look_back = 25 # 기억력은 1달 일 전후라고 치자. timesteps다.
 forecast_ahead = 25
-# hyperparameter tuning section
-filename=os.path.basename(os.path.realpath(sys.argv[0]))
 
-# Walk Forward Validation로 robustness 체크해 모델의 우수성 비교
-# https://machinelearningmastery.com/backtest-machine-learning-models-time-series-forecasting/
-from pandas import Series
-# series = Series.from_csv('sunspots.csv', header=0)
-# X = series.values
-# 일반적으로 영업일은 250일 쯤 된다.
+# hyperparameter tuning section
+filename = os.path.basename(os.path.realpath(sys.argv[0]))
+
+# 일반적으로 영업일은 250일 쯤 된다. 10-fold validation과 비슷하다.
 n_train = dataset.shape[0]-(forecast_ahead*10)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버하는게 중요).
-n_records = dataset.shape[0] # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
+n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
 average_rmse_list = []
-predictList =[]
+predictList = []
+forecast_per_week = []
 print("n_train %d" % n_train)
 print("n_records %d" % n_records)
+# Walk Forward Validation로 robustness 체크해 모델의 우수성 비교. 개념은 아래 출처에서.
+# https://machinelearningmastery.com/backtest-machine-learning-models-time-series-forecasting/
 for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어도 35일 이후 값을 알아야함. 휴일 뺀다면 25일.
     print("loop num : %d" % len(average_rmse_list))
     print("i : %d" % i)
 
     # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+filename+'model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
+    MODEL_DIR = './'+filename+' model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
     modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
     # 모델 업데이트 및 저장
     checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=10)
-
-    train, test = dataset[0:i, ], dataset[i-look_back : i+forecast_ahead, ] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
-    print('train=%d, test=%d' % (len(train), len(test)))
+    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=30)
+    train, val, test = dataset[0:i-look_back*2, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead,] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
+    print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
     trainX, trainY = create_dataset(train, look_back)
-    testX, testY = create_dataset(test, look_back)
-    print('trainX=%d, trainY=%d' % (len(trainX), len(trainY)))
-    print('testX=%d, testY=%d' % (len(testX), len(testY)))
-
-    # trainX, testX = X[0:i, ], X[i:i+35, ]
-    # trainY, testY = Y[0:i], Y[i:i + 35]
-    # Walk Forward Validation
-    # reshape into X=t and Y=t+1
+    valX, valY = create_dataset(val, look_back)
+    # testX, testY = create_dataset(test, look_back)  # forecast_ahead와 look_back이 같으니 이번엔 신경쓸거 없지만 다음 회차엔 신경써야한다.
+    print('trainX=%s, trainY=%s' % (trainX.shape, trainY.shape))
+    print('valX=%s, valY=%s' % (valX.shape, valY.shape))
 
     # reshape input to be [samples, time steps, features]
-    trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, testX.shape[1])) # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
-    testX = numpy.reshape(testX, (testX.shape[0], look_back, testX.shape[1])) # 계산을 위해 형을 바꾸는 식. 773
+    trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, number_of_var))
+    valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
+    # testX = numpy.reshape(testX, (testX.shape[0], look_back, number_of_var))
 
     # create and fit the LSTM network
     model = Sequential()
-    model.add(LSTM(4, input_shape=(None, look_back)))
+    model.add(LSTM(32, input_shape=(look_back, number_of_var)))
+    # model.add(LSTM(4, input_shape=(None, number_of_var)))
     # model.add(LSTM(10, batch_input_shape=(look_back, timesteps, number_of_var), stateful=True))
-    # model.add(Dense(5))
-    # model.add(Dense(2))
+    model.add(Dense(16))
+    model.add(Dense(8))
+    model.add(Dense(4))
+    model.add(Dense(2))
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
-    # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
-    # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
+    # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)
     # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    history = model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
-
+    hist = model.fit(trainX, trainY, validation_data=(valX, valY), nb_epoch=300, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
+    # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # make predictions
     trainPredict = model.predict(trainX)
-    testPredict = model.predict(testX)
+    valPredict = model.predict(valX)
 
-    # invert predictions
+    xhat = dataset[i-look_back:i, ]  # test셋의 X값 한 세트가 들어간다. 이경우는 값 1개만 예측하면 그만이라지만 좀더 생각해볼 필요가 있다.
+    testPredict = numpy.zeros((forecast_ahead, number_of_var))
+    for j in range(forecast_ahead):
+        prediction = model.predict(numpy.array([xhat]), batch_size=1)
+        testPredict[j] = prediction
+        xhat = numpy.vstack([xhat[1:], prediction]) # xhat[0]에 있던 녀석은 빼고 재접합해서 xhat[1:]+predction인걸로 한칸 shift해서 예측.
+
+    # invert predictions and answer
     trainPredict = scaler.inverse_transform(trainPredict)
     trainY = scaler.inverse_transform([trainY])
+    valPredict = scaler.inverse_transform(valPredict)
+    valY = scaler.inverse_transform([valY])
     testPredict = scaler.inverse_transform(testPredict)
-    testY = scaler.inverse_transform([testY])
-    # 곡 전체 예측
-    # seq_in = x_train[dataset.shape[0]-(window_size*10): dataset.shape[0]-(window_size*10)+window_size, ]
-    # seq_out = seq_in
-    # seq_in_featrues = []
-    # # for si in seq_in:
-    # #     features = code2features(si)
-    # #     seq_in_featrues.append(features)
-    #
-    # for i in range(pred_count):
-    #     sample_in = np.array(seq_in_featrues)
-    #     sample_in = np.reshape(sample_in, (window_size, 4, 2))  # 샘플 수, 타입스텝 수, 속성 수
-    #     pred_out = model.predict(sample_in)
-    #     idx = np.argmax(pred_out)
-    #     seq_out.append(idx2code[idx])
-    #
-    #     seq_in_featrues.append(features)
-    #     seq_in_featrues.pop(0)
-    #     print("seq_in_featrues")
-    #     print(seq_in_featrues)
-    #
-    # model.reset_states()
-    #
-    # print("full song prediction : ", seq_out)
-    #
+    test = scaler.inverse_transform(test)
 
     # calculate root mean squared error
-    trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:,0]))
-    print('Train Score: %.2f RMSE' % (trainScore))
-    testScore = math.sqrt(mean_squared_error(testY[0], testPredict[:,0]))
-    print('Test Score: %.2f RMSE' % (testScore))
+    trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:, 0]))
+    print('Train Score: %.4f RMSE' % trainScore)
+    valScore = math.sqrt(mean_squared_error(valY[0], valPredict[:, 0]))
+    print('Val Score: %.4f RMSE' % valScore)
+    testScore = math.sqrt(mean_squared_error(test, testPredict[:,0]))
+    print('Test Score: %.4f RMSE' % testScore)
 
     average_rmse_list.append(testScore)
-    if i == (n_records - forecast_ahead):
-        pyplot.plot(history.history['loss'], label='train')
-        pyplot.plot(history.history['val_loss'], label='test')
-        pyplot.legend()
-        pyplot.show()
+    if i == (n_records - forecast_ahead): # 루프마지막에.
+        plt.figure(figsize=(12, 5))
+        plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
+        plt.plot(numpy.arange(forecast_ahead), test[:forecast_ahead], label="test dataset")
+        plt.legend()
+        plt.show()
+
+        testPredict = numpy.reshape(testPredict, (-1, 5))
+        print(testPredict.shape)
+        forecast_per_week = testPredict.mean(axis=1)
 
 # print('average loss list:', end=" ")
 # print(average_rmse_list)
 print('average loss: %.9f' % numpy.mean(average_rmse_list))
+forecast_per_week = [round(n, 2) for n in forecast_per_week]
+print('forecast_per_week: ', end=" ")
+print(forecast_per_week)
 
-print("--- %s seconds ---" %(time.time() - start_time))
+print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %2f minute" % m)
 
 
-##만약 모델이 다른것 보다 rmse가 작아 우수할 경우
-# MODEL_DIR = './'+filename+'model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
-MODEL_DIR = os.getcwd()+'\\'+filename+'model_loopNum'+str(len(average_rmse_list)-1).zfill(2)+'\\'
+# 만약 이 모델이 다른것 보다 rmse가 작아 우수할 경우 재사용. 위는 그냥 다 주석처리해도 상관없다.
+MODEL_DIR = os.getcwd()+'\\'+filename+'model_loopNum'+str(9).zfill(2)+'\\'
 modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 마지막 모델 다시 불러오기.
 file_list.sort()
 print(file_list)
-# del model       # 테스트를 위해 메모리 내의 모델을 삭제
+del model       # 테스트를 위해 메모리 내의 모델을 삭제
 model = load_model(MODEL_DIR + file_list[0])
+xhat = dataset[-25:, ]
+fore_predict = numpy.zeros((forecast_ahead, number_of_var))
+for k in range(forecast_ahead):
+    prediction = model.predict(numpy.array([xhat]), batch_size=1)
+    fore_predict[k] = prediction
+    xhat = numpy.vstack([xhat[1:], prediction])
 
-short_memory = []
-model.p
-
-# for path, dirs, files in os.walk(MODEL_DIR):
-#     print('\nFolder: ', path)
-#     if files:
-#         for filename in files:
-#             print(' Files: ', os.path.join(path, filename))
-
-
-# # 모델 업데이트 및 저장
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
-# # 학습 자동 중단 설정
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=10)
-
-train = dataset[:, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
-# # print('train=%d, test=%d' % (len(train), len(test)))
-trainX, trainY = create_dataset(train, look_back)
-# # testX, testY = create_dataset(test, look_back)
-print('trainX=%d, trainY=%d' % (len(trainX), len(trainY)))
-# # print('testX=%d, testY=%d' % (len(testX), len(testY)))
-
-# reshape input to be [samples, time steps, features]
-trainX = numpy.reshape(trainX, (trainX.shape[0], 1, testX.shape[1])) # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
-# # testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1])) # 계산을 위해 형을 바꾸는 식. 773
-
-# # create and fit the LSTM network
-model = Sequential()
-model.add(LSTM(4, input_shape=(None, look_back)))
-# model.add(LSTM(10, batch_input_shape=(look_back, timesteps, number_of_var), stateful=True))
-# model.add(Dense(5))
-# model.add(Dense(2))
-model.add(Dense(1))
-model.compile(loss='mean_squared_error', optimizer='adam')
-# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
-# model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
-# model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-history = model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
-#
-# # make predictions
-# trainPredict = model.predict(trainX)
-# testPredict = model.predict(testX)
-#
-# # invert predictions
-# trainPredict = scaler.inverse_transform(trainPredict)
-# trainY = scaler.inverse_transform([trainY])
-# testPredict = scaler.inverse_transform(testPredict)
-# testY = scaler.inverse_transform([testY])
-#
-# # calculate root mean squared error
-# trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:,0]))
-# print('Train Score: %.2f RMSE' % (trainScore))
-# testScore = math.sqrt(mean_squared_error(testY[0], testPredict[:,0]))
-# print('Test Score: %.2f RMSE' % (testScore))
-#
-# average_rmse_list.append(testScore)
-# if i == (n_records- forecast_ahead):
-#     pyplot.plot(history.history['loss'], label='train')
-#     pyplot.plot(history.history['val_loss'], label='test')
-#     pyplot.legend()
-#     pyplot.show()
-
-
-
-
-# shift train predictions for plotting
-
-# trainPredictPlot = numpy.empty_like(dataset)
-# trainPredictPlot[:, :] = numpy.nan
-# trainPredictPlot[look_back:len(trainPredict)+look_back, :] = trainPredict
-
-# shift test predictions for plotting
-
-# testPredictPlot = numpy.empty_like(dataset)
-# testPredictPlot[:, :] = numpy.nan
-# testPredictPlot[len(trainPredict)+(look_back*2)+1:len(dataset)-1, :] = testPredict# plot baseline and predictions
-# plt.plot(scaler.inverse_transform(dataset))
-# plt.plot(trainPredictPlot)
-# plt.plot(testPredictPlot)
-
-
-# plt.show()
-
-
-# model = load_model('69-0.0005.hdf5')
-# df = pandas.read_csv("../dataset/date_And_ironorePrice-forecast.csv", header=0) #
-# datset = df.values
-# datset = dataset.astype('float32')
-# validationY = datset[:, 0]
-# validationY = scaler.fit_transform(validationY )
-#
-#
-# validationY = scaler.inverse_transform(validationY)
-
-
-# 3. 모델 사용하기
-# yhat = model.predict_classes(xhat)
+fore_predict = numpy.reshape(fore_predict, (-1, 5))
+forecast_per_week = fore_predict.mean(axis=1)
+print(forecast_per_week)
