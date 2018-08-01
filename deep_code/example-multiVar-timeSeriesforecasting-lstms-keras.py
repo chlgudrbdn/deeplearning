@@ -1,162 +1,135 @@
-#-*- coding: utf-8 -*-
-# https://m.blog.naver.com/silvury/220939233742
-# https://machinelearningmastery.com/time-series-prediction-lstm-recurrent-neural-networks-python-keras/
-
-import numpy
-import matplotlib.pyplot as plt
-import pandas
-import math
+# -*- coding: utf-8 -*-
+from datetime import datetime
+from math import sqrt
+from numpy import concatenate
+from matplotlib import pyplot
+from pandas import read_csv
+from pandas import DataFrame
+from pandas import concat
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_squared_error
 from keras.models import Sequential
-from keras.models import load_model
 from keras.layers import Dense
 from keras.layers import LSTM
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
-import os, sys
-from keras.callbacks import ModelCheckpoint,EarlyStopping
-from matplotlib import pyplot
-import time
-start_time = time.time()
-# convert an array of values into a dataset matrix
-def create_dataset(dataset, look_back=1):
-    dataX, dataY = [], []
-    for i in range(len(dataset)-look_back-1): # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4
-        dataX.append(dataset[i:(i+look_back), 0]) # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
-        dataY.append(dataset[i + look_back, 0]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
-    return numpy.array(dataX), numpy.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦.
-# fix random seed for reproducibility
-numpy.random.seed(42)
-# load the dataset
-# filename = os.getcwd() + '\full_data_about_iron_ore.csv'
-filename = os.getcwd() + '\\dataset\\full_data_about_iron_ore.csv'
-dataframe = pandas.read_csv(filename, usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
-dataset = dataframe.values
-dataset = dataset.astype('float32')
 
-# normalize the dataset
+
+# load data
+def parse(x):
+    return datetime.strptime(x, '%Y %m %d %H')
+
+
+dataset = read_csv('raw.csv', parse_dates=[['year', 'month', 'day', 'hour']], index_col=0, date_parser=parse)
+dataset.drop('No', axis=1, inplace=True)
+# manually specify column names
+dataset.columns = ['pollution', 'dew', 'temp', 'press', 'wnd_dir', 'wnd_spd', 'snow', 'rain']
+dataset.index.name = 'date'
+# mark all NA values with 0
+dataset['pollution'].fillna(0, inplace=True)
+# drop the first 24 hours
+dataset = dataset[24:]
+# summarize first 5 rows
+print(dataset.head(5))
+# save to file
+dataset.to_csv('pollution.csv')
+
+# load dataset
+dataset = read_csv('pollution.csv', header=0, index_col=0)
+values = dataset.values
+# specify columns to plot
+groups = [0, 1, 2, 3, 5, 6, 7]
+i = 1
+# plot each column
+pyplot.figure()
+for group in groups:
+    pyplot.subplot(len(groups), 1, i)
+    pyplot.plot(values[:, group])
+    pyplot.title(dataset.columns[group], y=0.5, loc='right')
+    i += 1
+pyplot.show()
+
+
+# convert series to supervised learning
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+    n_vars = 1 if type(data) is list else data.shape[1] # 딱히 data의 type이 리스트가 아니면 변수 개수 추출. 리스트라면 1.
+    df = DataFrame(data)
+    cols, names = list(), list()
+    # input sequence (t-n, ... t-1)
+    for i in range(n_in, 0, -1): # 예상에 쓸 t이전 데이터들.
+        cols.append(df.shift(i)) # 일단 사용된 코드에선 1이라고 n_in을 정해서 i는 1뿐. 실제론 더 많은 범위의 데이터를 이용할테니 t-1, t-2...가 t시점의 종속변수에 대응.
+        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)] #
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, n_out): # t +a 앞으로 예상할 범위. 물론 그 예상한 속성들로 종속변수를 계산해야할테니 속성개수만큼 t+a를 예상.
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+    # put it all together
+    agg = concat(cols, axis=1) # axis=1은 좌우로 합치는 의미.
+    agg.columns = names # 이름 부여. (t-1들)
+    # drop rows with NaN values
+    if dropnan:# True로만 되긴 한다.
+        agg.dropna(inplace=True) # dataframe에서 dropna에 inplace=True이면 NA있는 행은 모두 제거.
+    return agg
+
+
+# load dataset
+# dataset = read_csv('pollution.csv', header=0, index_col=0)
+dataset = read_csv('pollution.csv', header=0, index_col=0)
+values = dataset.values
+# integer encode direction # factor라 볼 수 있는 데이터는 걍 숫자로 바꿈.
+encoder = LabelEncoder()
+values[:, 4] = encoder.fit_transform(values[:, 4])
+# ensure all data is float
+values = values.astype('float32')
+# normalize features
 scaler = MinMaxScaler(feature_range=(0, 1))
-dataset = scaler.fit_transform(dataset)
-X = dataset[:, 1:] # 일단 날짜만 갖고 지지고 볶는것이므로 크게 신경쓸 건 없다.
-Y = dataset[:, 0]
+scaled = scaler.fit_transform(values)
+# frame as supervised learning
+reframed = series_to_supervised(scaled, 1, 1) # 각 변수들이 어떻게 시간차나는지를 반영할 용량으로 함.
+# drop columns we don't want to predict
+reframed.drop(reframed.columns[[9, 10, 11, 12, 13, 14, 15]], axis=1, inplace=True)
+print(reframed.head())  # scaled 된 것들.
 
+# split into train and test sets
+values = reframed.values
+n_train_hours = 365 * 24
+train = values[:n_train_hours, :]# 1:4 는 1<=x<4 란 의미라 이런식으로 표현
+test = values[n_train_hours:, :]
+# split into input and outputs
+train_X, train_y = train[:, :-1], train[:, -1] # -1의 바로 앞까지를 X독립변수. -1행을 종속변수로 훈련에 넣는다.
+test_X, test_y = test[:, :-1], test[:, -1]
+# reshape input to be 3D [samples, timesteps, features]
+train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))  # 3차원 배열로 바꿔두기
+test_X = test_X.reshape((test_X.shape[0], 1, test_X.shape[1]))
+print(train_X.shape, train_y.shape, test_X.shape, test_y.shape)
 
-# hyperparameter tuning section
-number_of_var = len(dataframe.columns)-1 # 종속변수는 뺀다.
-look_back = 30
-timesteps = 5
+# design network
+model = Sequential()
+model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
+model.add(Dense(1))
+model.compile(loss='mae', optimizer='adam')
+# fit network
+history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2, shuffle=False)
+# plot history
+pyplot.plot(history.history['loss'], label='train')
+pyplot.plot(history.history['val_loss'], label='test')
+pyplot.legend()
+pyplot.show()
 
-forecast_ahead = 35
-# hyperparameter tuning section
-filename=os.path.basename(os.path.realpath(sys.argv[0]))
-
-# Walk Forward Validation로 robustness 체크해 모델의 우수성 비교
-# https://machinelearningmastery.com/backtest-machine-learning-models-time-series-forecasting/
-from pandas import Series
-# series = Series.from_csv('sunspots.csv', header=0)
-# X = series.values
-n_train = dataset.shape[0]-(forecast_ahead*11)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버).
-n_records = dataset.shape[0]-(forecast_ahead-1)  # 35가 아닌 이유는 range는 마지막 수는 리스트에 포함하지 않기 때문.
-average_rmse_list = []
-for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어도 35일 이후 값을 알아야함.
-    print("loop num : %d" % len(average_rmse_list))
-
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+filename+'model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{epoch:03d}-{val_loss:.9f}.hdf5"
-    # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
-    # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=10)
-
-    train, test = dataset[0:i, ], dataset[i:i+forecast_ahead, ]
-    print('train=%d, test=%d' % (len(train), len(test)))
-    trainX, trainY = create_dataset(train, look_back)
-    testX, testY = create_dataset(test, look_back)
-    print('train=%d, test=%d' % (len(trainX), len(testX)))
-
-    # trainX, testX = X[0:i, ], X[i:i+35, ]
-    # trainY, testY = Y[0:i], Y[i:i + 35]
-    # Walk Forward Validation
-    # reshape into X=t and Y=t+1
-
-    # reshape input to be [samples, time steps, features]
-    trainX = numpy.reshape(trainX, (trainX.shape[0], 1, testX.shape[1])) # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
-    testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1])) # 계산을 위해 형을 바꾸는 식. 773
-
-    # create and fit the LSTM network
-    model = Sequential()
-    model.add(LSTM(4, input_shape=(None, look_back)))
-    # model.add(LSTM(10, batch_input_shape=(look_back, timesteps, number_of_var), stateful=True))
-    # model.add(Dense(5))
-    # model.add(Dense(2))
-    model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
-    # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
-    # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    history = model.fit(trainX, trainY, validation_data=(testX, testY), nb_epoch=100, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
-
-    # pyplot.plot(history.history['loss'], label='train')
-    # pyplot.plot(history.history['val_loss'], label='test')
-    # pyplot.legend()
-    # pyplot.show()
-
-    # make predictions
-    trainPredict = model.predict(trainX)
-    testPredict = model.predict(testX)
-
-    # invert predictions
-    trainPredict = scaler.inverse_transform(trainPredict)
-    trainY = scaler.inverse_transform([trainY])
-    testPredict = scaler.inverse_transform(testPredict)
-    testY = scaler.inverse_transform([testY])
-
-    # calculate root mean squared error
-    trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:,0]))
-    print('Train Score: %.2f RMSE' % (trainScore))
-    testScore = math.sqrt(mean_squared_error(testY[0], testPredict[:,0]))
-    print('Test Score: %.2f RMSE' % (testScore))
-
-    average_rmse_list.append(testScore)
-
-print('average loss list:', end=" ")
-print(average_rmse_list)
-print('average loss: %.9f' % numpy.mean(average_rmse_list))
-# shift train predictions for plotting
-
-# trainPredictPlot = numpy.empty_like(dataset)
-# trainPredictPlot[:, :] = numpy.nan
-# trainPredictPlot[look_back:len(trainPredict)+look_back, :] = trainPredict
-
-# shift test predictions for plotting
-
-# testPredictPlot = numpy.empty_like(dataset)
-# testPredictPlot[:, :] = numpy.nan
-# testPredictPlot[len(trainPredict)+(look_back*2)+1:len(dataset)-1, :] = testPredict# plot baseline and predictions
-# plt.plot(scaler.inverse_transform(dataset))
-# plt.plot(trainPredictPlot)
-# plt.plot(testPredictPlot)
-
-print("--- %s seconds ---" %(time.time() - start_time))
-m, s = divmod((time.time() - start_time), 60)
-print("almost %2f minute" % m)
-
-# plt.show()
-
-
-# model = load_model('69-0.0005.hdf5')
-# df = pandas.read_csv("../dataset/date_And_ironorePrice-forecast.csv", header=0) #
-# datset = df.values
-# datset = dataset.astype('float32')
-# validationY = datset[:, 0]
-# validationY = scaler.fit_transform(validationY )
-#
-#
-# validationY = scaler.inverse_transform(validationY)
-
-
-# 3. 모델 사용하기
-# yhat = model.predict_classes(xhat)
+# make a prediction
+yhat = model.predict(test_X)
+test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))# testX를 바꿨기 때문에 다시 2차원으로 바꾸는 방식.
+# invert scaling for forecast
+inv_yhat = concatenate((yhat, test_X[:, 1:]), axis=1) # axis=1은 세로로 결합. 근데 어차피 떼어낼 텐데 합칠이유를 잘 모르겠다.
+inv_yhat = scaler.inverse_transform(inv_yhat)
+inv_yhat = inv_yhat[:, 0]
+# invert scaling for actual
+test_y = test_y.reshape((len(test_y), 1))
+inv_y = concatenate((test_y, test_X[:, 1:]), axis=1)
+inv_y = scaler.inverse_transform(inv_y)
+inv_y = inv_y[:, 0]
+# calculate RMSE
+rmse = sqrt(mean_squared_error(inv_y, inv_yhat))
+print('Test RMSE: %.3f' % rmse)

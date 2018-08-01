@@ -45,8 +45,13 @@ checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=1
 # 학습 자동 중단 설정
 early_stopping_callback = EarlyStopping(monitor='val_loss', patience=100)
 
-model.fit(X_train, Y_train, validation_split=0.2, epochs=3500, batch_size=500, verbose=0, validation_data=(X_test, Y_test),
+model.fit(X_train, Y_train, validation_split=0.2, epochs=3500, batch_size=500, verbose=2, validation_data=(X_test, Y_test),
           callbacks=[early_stopping_callback, checkpointer])
+
+
+testScore = model.evaluate(X_test, Y_test, verbose=0)
+# testScore = math.sqrt(testScore)
+print('Test Score: %s RMSE' % testScore)
 
 predictY = model.predict(X_test)
 testScore = math.sqrt(mean_squared_error(Y_test, predictY[:, 0]))
@@ -60,6 +65,12 @@ file_list.sort()
 del model       # 테스트를 위해 메모리 내의 모델을 삭제
 print(file_list[0])
 model = load_model(MODEL_DIR + file_list[0])
+
+testScore = model.evaluate(X_test, Y_test, verbose=0)
+# testScore = math.sqrt(testScore)
+print('Test Score: %s RMSE' % testScore)
+
 fore_predict = model.predict(X_test)
 testScore = math.sqrt(mean_squared_error(Y_test, fore_predict[:, 0]))
 print('Test Score: %.9f RMSE' % testScore)
+

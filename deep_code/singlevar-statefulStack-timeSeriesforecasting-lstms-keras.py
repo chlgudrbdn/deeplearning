@@ -1,14 +1,13 @@
 #-*- coding: utf-8 -*-
-# https://m.blog.naver.com/silvury/220939233742
-# https://machinelearningmastery.com/time-series-prediction-lstm-recurrent-neural-networks-python-keras/
 
 import numpy
 import matplotlib.pyplot as plt
 import pandas
 import math
+import keras
 from keras.models import Sequential
 from keras.models import load_model
-from keras.layers import Dense
+from keras.layers import Dense, Dropout
 from keras.layers import LSTM
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
@@ -26,14 +25,22 @@ def create_dataset(dataset, look_back=1):
         dataY.append(dataset[i + look_back, 0]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return numpy.array(dataX), numpy.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
+class CustomHistory(keras.callbacks.Callback):
+    def init(self):
+        self.train_loss = []
+        self.val_loss = []
+
+    def on_epoch_end(self, batch, logs={}):
+        self.train_loss.append(logs.get('loss'))
+        self.val_loss.append(logs.get('val_loss'))
+
 # fix random seed for reproducibility
 numpy.random.seed(42)
 
 # load the dataset
-
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
 # filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
-dataframe = pandas.read_csv(filename)
+dataframe = pandas.read_csv(filename, usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 
@@ -42,7 +49,7 @@ scaler = MinMaxScaler(feature_range=(0, 1))
 dataset = scaler.fit_transform(dataset)
 
 # hyperparameter tuning section
-number_of_var = len(dataframe.columns) #  종속변수는 뺀다.
+number_of_var = len(dataframe.columns)
 look_back = 25 # 기억력은 1달 일 전후라고 치자. timesteps다.
 forecast_ahead = 25
 
@@ -50,7 +57,7 @@ forecast_ahead = 25
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
 
 # 일반적으로 영업일은 250일 쯤 된다. 10-fold validation과 비슷하다.
-n_train = dataset.shape[0]-(forecast_ahead*10)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버하는게 중요).
+n_train = dataset.shape[0]-(forecast_ahead*10)
 n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
 average_rmse_list = []
 predictList = []
@@ -71,8 +78,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # 모델 업데이트 및 저장
     checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=30)
-    # 처음엔 0~i-look_back-1=0~2080=2081개 를 훈련. 2081~2105=25
+    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i-look_back*2, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead,] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
     print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
     trainX, trainY = create_dataset(train, look_back)
@@ -80,43 +86,56 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # testX, testY = create_dataset(test, look_back)  # forecast_ahead와 look_back이 같으니 이번엔 신경쓸거 없지만 다음 회차엔 신경써야한다.
     print('trainX=%s, trainY=%s' % (trainX.shape, trainY.shape))
     print('valX=%s, valY=%s' % (valX.shape, valY.shape))
-    # print(testX)
-    # print(testY)
-    # print('testX=%s, testY=%s' % (testX.shape, testY.shape))
 
     # reshape input to be [samples, time steps, features]
-    trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, number_of_var))  # 원본을 따르면 행 개수1571,1,1가 된다. 중간은 time steps 그대로
-    valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))  # 계산을 위해 형을 바꾸는 식. 773
-    # testX = numpy.reshape(testX, (testX.shape[0], look_back, number_of_var))  # 계산을 위해 형을 바꾸는 식. 773
+    trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, number_of_var))
+    valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
+    # testX = numpy.reshape(testX, (testX.shape[0], look_back, number_of_var))
 
     # create and fit the LSTM network
     model = Sequential()
-    model.add(LSTM(32, input_shape=(look_back, number_of_var)))
-    # model.add(LSTM(4, input_shape=(None, number_of_var)))
-    # model.add(LSTM(10, batch_input_shape=(look_back, timesteps, number_of_var), stateful=True))
-    model.add(Dense(16))
-    model.add(Dense(8))
-    model.add(Dense(4))
-    model.add(Dense(2))
+    for l in range(2):
+        model.add(LSTM(32, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
+        model.add(Dropout(0.3))
+    model.add(LSTM(32, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
+    model.add(Dropout(0.3))
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)# verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정합니다. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
-    # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    hist = model.fit(trainX, trainY, validation_data=(valX, valY), nb_epoch=300, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
 
+    model.compile(loss='mean_squared_error', optimizer='adam')
+
+    custom_hist = CustomHistory()
+    custom_hist.init()
+
+    for l in range(200):
+        model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0,
+                  callbacks=[custom_hist, checkpointer])
+        model.reset_states()
+    print("--- %s seconds ---" % (time.time() - start_time))
+    m, s = divmod((time.time() - start_time), 60)
+    print("loop num %d take almost %2f minute" % (len(average_rmse_list), m))
+
+    # 5. 학습과정 살펴보기
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    plt.ylim(0.0, 0.15)
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+    plt.show()
+
+    file_list = os.listdir(MODEL_DIR)  # 이번 루프 가장 최고 모델 다시 불러오기.
+    file_list.sort()
+    model = load_model(MODEL_DIR + file_list[0])
     # make predictions
     trainPredict = model.predict(trainX)
     valPredict = model.predict(valX)
 
     xhat = dataset[i-look_back:i, ]  # test셋의 X값 한 세트가 들어간다. 이경우는 값 1개만 예측하면 그만이라지만 좀더 생각해볼 필요가 있다.
-    # print(xhat)
     testPredict = numpy.zeros((forecast_ahead, number_of_var))
     for j in range(forecast_ahead):
         prediction = model.predict(numpy.array([xhat]), batch_size=1)
         testPredict[j] = prediction
         xhat = numpy.vstack([xhat[1:], prediction]) # xhat[0]에 있던 녀석은 빼고 재접합해서 xhat[1:]+predction인걸로 한칸 shift해서 예측.
-    # print("testPredict")
-    # print(testPredict)
 
     # invert predictions and answer
     trainPredict = scaler.inverse_transform(trainPredict)
@@ -129,10 +148,8 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # calculate root mean squared error
     trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:, 0]))
     print('Train Score: %.4f RMSE' % trainScore)
-
     valScore = math.sqrt(mean_squared_error(valY[0], valPredict[:, 0]))
     print('Val Score: %.4f RMSE' % valScore)
-
     testScore = math.sqrt(mean_squared_error(test, testPredict[:,0]))
     print('Test Score: %.4f RMSE' % testScore)
 
@@ -177,4 +194,5 @@ for k in range(forecast_ahead):
 
 fore_predict = numpy.reshape(fore_predict, (-1, 5))
 forecast_per_week = fore_predict.mean(axis=1)
+forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
 print(forecast_per_week)
