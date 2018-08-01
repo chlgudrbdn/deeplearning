@@ -18,21 +18,24 @@ dataframe = pandas.read_csv(filename)
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 # normalize the dataset
-scaler = MinMaxScaler(feature_range=(0, 1))
-dataset = scaler.fit_transform(dataset)
+# scaler = MinMaxScaler(feature_range=(0, 1))
+# dataset = scaler.fit_transform(dataset)
+X = dataset[:, 1:]
+y = dataset[:, 0]
+
+# x_scaler = MinMaxScaler(feature_range=(0, 1))
+# y_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = x_scaler.fit_transform(X)
+# y = y_scaler.fit_transform(y)
 '''
 print(df.info())
 print(df.head())
 '''
-X = dataset[:, 1:]
-y = dataset[:, 0]
 number_of_var = X.shape[1] # 4 기대.
 # first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)  # nC2 6
 
-
 forecast_ahead = 25
-
-
+filename = os.path.basename(os.path.realpath(sys.argv[0]))
 n_train = y.shape[0] - (forecast_ahead*10)
 n_records = y.shape[0]
 average_rmse_list = []
@@ -47,20 +50,8 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     print("i : %d" % i)
     X_train, X_test = X[0:i, ], X[i: i+forecast_ahead, ]
     y_train, y_test = y[0:i, ], y[i: i+forecast_ahead, ]
-    print(X_train.shape)
-    print(X_test.shape)
-    print(y_train.shape)
-    print(y_test.shape)
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=seed)
 
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './' + filename + ' model_loopNum' + str(len(average_rmse_list)).zfill(2) + '/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
-    # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=30)
+
 
     model = Sequential()
     model.add(Dense(32, input_dim=number_of_var, activation='relu'))
@@ -75,15 +66,32 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # model.add(Dropout(0.3))
     # model.add(Dense(int(first_layer_node_cnt/32), activation='relu'))
     # model.add(Dropout(0.3))
-    model.add(Dense(1), activation='relu')
+    model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
-    model.fit(X_train, y_train, epochs=1, verbose=0, callbacks=[early_stopping_callback, checkpointer], validation_data=(X_test, y_test))
 
+    if i == (n_records - forecast_ahead):
+        # 모델 저장 폴더 만들기
+        MODEL_DIR = filename + ' model_loopNum' + str(len(average_rmse_list)).zfill(2) + '/'
+        if not os.path.exists(MODEL_DIR):
+            os.mkdir(MODEL_DIR)
+        modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+        # 모델 업데이트 및 저장
+        checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+        early_stopping_callback = EarlyStopping(monitor='val_loss', patience=1000)
+
+        model.fit(X_train, y_train, epochs=3000, verbose=0, validation_data=(X_test, y_test)
+                  , callbacks=[early_stopping_callback, checkpointer])
+    else:
+        early_stopping_callback = EarlyStopping(monitor='val_loss', patience=1000)
+        model.fit(X_train, y_train, epochs=3000, verbose=0, validation_data=(X_test, y_test)
+                  , callbacks=[early_stopping_callback])
     # 예측 값과 실제 값의 비교
-    testScore = model.evaluate(X_test, y_test, verbose=0)
-    print('Test Score: %.9f RMSE' % testScore)
-    y_prediction = model.predict(X_test).flatten()  # 데이터 배열이 몇 차원이든 모두 1차원으로 바꿔 읽기 쉽게 해주는 함수
-    y_prediction = scaler.inverse_transform(y_prediction)
+    # testScore = model.evaluate(X_test, y_test, verbose=0)
+    # print('Test Score: %.9f RMSE' % testScore)
+    # y_prediction = numpy.zeros((forecast_ahead, 1))
+    y_prediction = model.predict(X_test)  # 데이터 배열이 몇 차원이든 모두 1차원으로 바꿔 읽기 쉽게 해주는 함수
+
+    # y_prediction = y_scaler.inverse_transform(y_prediction)
 
     # calculate root mean squared error
     testScore = math.sqrt(mean_squared_error(y_test, y_prediction[:, 0]))
@@ -91,29 +99,32 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
 
     average_rmse_list.append(testScore)
 
+print('average loss: %.9f' % numpy.mean(average_rmse_list))
+
 
 filename = os.getcwd() + '\date_And_ironorePrice-forecast.csv'
 # filename = os.getcwd() + '\dataset\date_And_ironorePrice-forecast.csv'
 df = pandas.read_csv(filename)
 val_dat = df.values
 val_dat = val_dat.astype('float32')
-val_dat = scaler.fit_transform(val_dat)
-
+# val_dat = y_scaler.fit_transform(val_dat)
+filename = os.path.basename(os.path.realpath(sys.argv[0]))
 # 만약 이 모델이 다른것 보다 rmse가 작아 우수할 경우 재사용. 위는 그냥 다 주석처리해도 상관없다.
-MODEL_DIR = os.getcwd()+'\\'+filename+'model_loopNum'+str(9).zfill(2)+'\\'
-modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+MODEL_DIR = os.getcwd()+'\\'+filename+' model_loopNum'+str(9).zfill(2)+'\\'
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 마지막 모델 다시 불러오기.
 file_list.sort()
-print(file_list)
+# print(file_list)
 del model       # 테스트를 위해 메모리 내의 모델을 삭제
 model = load_model(MODEL_DIR + file_list[0])
-xhat = dataset[-25:, ]
-fore_predict = numpy.zeros((forecast_ahead, number_of_var))
+# xhat = val_dat
+# fore_predict = numpy.zeros((forecast_ahead, number_of_var))
 # for k in range(forecast_ahead):
-prediction = model.predict(numpy.array([xhat]), batch_size=1)
+# fore_predict = model.predict(numpy.array([xhat]), batch_size=1)
+fore_predict = model.predict(val_dat, batch_size=1)
 # fore_predict[k] = prediction
 # xhat = numpy.vstack([xhat[1:], prediction])
 
 fore_predict = numpy.reshape(fore_predict, (-1, 5))
 forecast_per_week = fore_predict.mean(axis=1)
+forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
 print(forecast_per_week)

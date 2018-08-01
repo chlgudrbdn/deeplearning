@@ -70,7 +70,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # 모델 업데이트 및 저장
     checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=30)
+    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i-look_back*2, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead,] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
     print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
     trainX, trainY = create_dataset(train, look_back)
@@ -97,9 +97,15 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     model.compile(loss='mean_squared_error', optimizer='adam')
     # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)
     # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    hist = model.fit(trainX, trainY, validation_data=(valX, valY), nb_epoch=300, batch_size=1, verbose=0, callbacks=[early_stopping_callback, checkpointer])
+    hist = model.fit(trainX, trainY, validation_data=(valX, valY), nb_epoch=500, batch_size=1, verbose=0,
+                     callbacks=[early_stopping_callback, checkpointer])
     # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # make predictions
+
+    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
+    file_list.sort()
+    model = load_model(MODEL_DIR + file_list[0])
+
     trainPredict = model.predict(trainX)
     valPredict = model.predict(valX)
 
@@ -167,4 +173,5 @@ for k in range(forecast_ahead):
 
 fore_predict = numpy.reshape(fore_predict, (-1, 5))
 forecast_per_week = fore_predict.mean(axis=1)
+forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
 print(forecast_per_week)
