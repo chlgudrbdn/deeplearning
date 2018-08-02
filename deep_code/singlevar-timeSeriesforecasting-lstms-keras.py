@@ -170,7 +170,7 @@ for k in range(forecast_ahead):
     prediction = model.predict(numpy.array([xhat]), batch_size=1)
     fore_predict[k] = prediction
     xhat = numpy.vstack([xhat[1:], prediction])
-
+fore_predict = scaler.inverse_transform(fore_predict)
 fore_predict = numpy.reshape(fore_predict, (-1, 5))
 forecast_per_week = fore_predict.mean(axis=1)
 forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
