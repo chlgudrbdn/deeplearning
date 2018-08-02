@@ -282,4 +282,5 @@ testPredict = scaler.inverse_transform(testPredict)
 testPredict = numpy.reshape(testPredict, (-1, 5))
 print(testPredict)
 forecast_per_week = testPredict.mean(axis=1)
+forecast_per_week = [round(n, 2) for n in forecast_per_week]
 print(forecast_per_week)
