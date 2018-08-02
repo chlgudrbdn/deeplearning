@@ -9,6 +9,8 @@ import os, sys
 import tensorflow as tf
 import math
 from sklearn.metrics import mean_squared_error
+import time
+start_time = time.time()
 # seed 값 설정
 seed = 0
 numpy.random.seed(seed)
@@ -45,7 +47,7 @@ checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=1
 # 학습 자동 중단 설정
 early_stopping_callback = EarlyStopping(monitor='val_loss', patience=100)
 
-model.fit(X_train, Y_train, validation_split=0.2, epochs=3500, batch_size=500, verbose=2, validation_data=(X_test, Y_test),
+model.fit(X_train, Y_train, validation_split=0.2, epochs=500, batch_size=500, verbose=2, validation_data=(X_test, Y_test),
           callbacks=[early_stopping_callback, checkpointer])
 
 
@@ -73,4 +75,5 @@ print('Test Score: %s RMSE' % testScore)
 fore_predict = model.predict(X_test)
 testScore = math.sqrt(mean_squared_error(Y_test, fore_predict[:, 0]))
 print('Test Score: %.9f RMSE' % testScore)
-
+print("--- %s seconds ---" % (time.time() - start_time))
+m, s = divmod((time.time() - start_time), 60)

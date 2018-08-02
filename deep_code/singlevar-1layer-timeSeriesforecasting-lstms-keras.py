@@ -97,6 +97,9 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
                      callbacks=[early_stopping_callback, checkpointer])
     # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # make predictions
+    print("--- %s seconds ---" % (time.time() - start_time))
+    m, s = divmod((time.time() - start_time), 60)
+    print("loop num %d take almost %2f minute" % (len(average_rmse_list), m))
 
     file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
     file_list.sort()
