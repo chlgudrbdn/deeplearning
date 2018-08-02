@@ -132,14 +132,14 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     testScore = math.sqrt(mean_squared_error(test, testPredict[:,0]))
     print('Test Score: %.4f RMSE' % testScore)
 
+    plt.figure(figsize=(12, 5))
+    plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
+    plt.plot(numpy.arange(forecast_ahead), test[:forecast_ahead], label="test dataset")
+    plt.legend()
+    plt.show()
+
     average_rmse_list.append(testScore)
     if i == (n_records - forecast_ahead): # 루프마지막에.
-        plt.figure(figsize=(12, 5))
-        plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
-        plt.plot(numpy.arange(forecast_ahead), test[:forecast_ahead], label="test dataset")
-        plt.legend()
-        plt.show()
-
         testPredict = numpy.reshape(testPredict, (-1, 5))
         print(testPredict.shape)
         forecast_per_week = testPredict.mean(axis=1)
@@ -157,11 +157,11 @@ print("almost %2f minute" % m)
 
 
 # 만약 이 모델이 다른것 보다 rmse가 작아 우수할 경우 재사용. 위는 그냥 다 주석처리해도 상관없다.
-MODEL_DIR = os.getcwd()+'\\'+filename+'model_loopNum'+str(9).zfill(2)+'\\'
+MODEL_DIR = os.getcwd()+'\\'+filename+' model_loopNum'+str(9).zfill(2)+'\\'
 modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 마지막 모델 다시 불러오기.
 file_list.sort()
-print(file_list)
+print(file_list[0])
 del model       # 테스트를 위해 메모리 내의 모델을 삭제
 model = load_model(MODEL_DIR + file_list[0])
 xhat = dataset[-25:, ]
@@ -170,7 +170,7 @@ for k in range(forecast_ahead):
     prediction = model.predict(numpy.array([xhat]), batch_size=1)
     fore_predict[k] = prediction
     xhat = numpy.vstack([xhat[1:], prediction])
-
+fore_predict = scaler.inverse_transform(fore_predict)
 fore_predict = numpy.reshape(fore_predict, (-1, 5))
 forecast_per_week = fore_predict.mean(axis=1)
 forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
