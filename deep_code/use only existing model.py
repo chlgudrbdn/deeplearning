@@ -3,7 +3,20 @@ import numpy
 import matplotlib.pyplot as plt
 import pandas
 import math
+import tensorflow as tf
 import keras
+from keras import backend as K
+
+from keras.models import Sequential
+from keras.models import load_model
+from keras.layers import Dense, Dropout
+from keras.layers import LSTM
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+import os
+from keras.callbacks import ModelCheckpoint
+import random as rn
+import time
 
 from keras.models import Sequential
 from keras.models import load_model
@@ -34,8 +47,13 @@ start_time = time.time()
 #         self.train_loss.append(logs.get('loss'))
 #         self.val_loss.append(logs.get('val_loss'))
 # fix random seed for reproducibility
-# numpy.random.seed(42)
-#
+os.environ['PYTHONHASHSEED'] = '0'
+rn.seed(42)
+numpy.random.seed(42)
+session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
+tf.set_random_seed(42)
+sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+K.set_session(sess)
 # # load the dataset
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
 # filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
@@ -119,12 +137,16 @@ forecast_per_week = []
 # plt.legend(['train', 'val', 'testRMSE'], loc='upper left')
 # plt.show()
 
-MODEL_DIR = './singlevar-statefulStack-timeSeriesforecasting-lstms-keras.py model_loopNum10/'
-# MODEL_DIR = './singlevar-statefulStack-timeSeriesforecasting-lstms-keras.py model_loopNum11/'
+# MODEL_DIR = './singlevar-statefulStack-timeSeriesforecasting-lstms-keras.py model_loopNum10/'
+MODEL_DIR = './singlevar-statefulStack-timeSeriesforecasting-lstms-keras.py model_loopNum11/'
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
 file_list.sort()
 print(file_list[0])
+K.set_learning_phase(0)
+model = None
 model = load_model(MODEL_DIR + file_list[0])
+model.compile(optimizer=model.optimizer, loss=model.loss, metrics=model.metrics)
+# model = model.load_weights(MODEL_DIR + file_list[0])
 
 # trainPredict = model.predict(trainX, batch_size=1)  # 다음번엔 최소공배수로 예측 되도록 앞쪽 데이터는 좀 잘라두자.
 # valPredict = model.predict(valX, batch_size=1)
@@ -136,10 +158,7 @@ for j in range(forecast_ahead):
     testPredict[j] = prediction
     xhat = numpy.vstack([xhat[1:], prediction])  # xhat[0]에 있던 녀석은 빼고 재접합해서 xhat[1:]+predction인걸로 한칸 shift해서 예측.
 
-plt.figure(figsize=(12, 5))
-plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
-plt.legend()
-plt.show()
+
 
 testPredict = scaler.inverse_transform(testPredict)
 testPredict = numpy.reshape(testPredict, (-1, 5))
@@ -147,3 +166,8 @@ print(testPredict)
 forecast_per_week = testPredict.mean(axis=1)
 forecast_per_week = [round(n, 2) for n in forecast_per_week]
 print(forecast_per_week)
+
+# plt.figure(figsize=(12, 5))
+# plt.plot(numpy.arange(5), forecast_per_week, 'r', label="prediction")
+# plt.legend()
+# plt.show()

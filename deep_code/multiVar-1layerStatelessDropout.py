@@ -22,8 +22,8 @@ start_time = time.time()
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
     for i in range(len(dataset)-look_back): # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프. 1을 빼야할 이유는 모르겠다.
-        dataX.append(dataset[i:(i+look_back), 0] )  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
-        dataY.append(dataset[i + look_back, 0]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
+        dataX.append(dataset[i:(i+look_back), ] )  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
+        dataY.append(dataset[i + look_back, ]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return numpy.array(dataX), numpy.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
 class CustomHistory(keras.callbacks.Callback):
@@ -38,9 +38,10 @@ class CustomHistory(keras.callbacks.Callback):
 numpy.random.seed(42)
 
 # load the dataset
-filename = os.getcwd() + '\\full_data_about_iron_ore.csv'
+# filename = os.getcwd() + '\\full_data_about_iron_ore.csv'
+filename = os.getcwd() + '\date_And_ironorePrice.csv'
 # filename = os.getcwd() + '\\dataset\\full_data_about_iron_ore.csv'
-dataframe = pandas.read_csv(filename, usecols=[0]) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
+dataframe = pandas.read_csv(filename) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 
@@ -50,16 +51,16 @@ dataset = scaler.fit_transform(dataset)
 
 # hyperparameter tuning section
 number_of_var = len(dataframe.columns)
-look_back = 25  # 기억력은 1달 일 전후라고 치자. timesteps다.
-forecast_ahead = 25
-num_epochs = 300
+look_back = 1  # 기억력은 1달 일 전후라고 치자. timesteps다.
+forecast_ahead = 1
+num_epochs = 1
 # hyperparameter tuning section
-filename = os.path.basename(os.path.realpath(sys.argv[0]))
+script_name = os.path.basename(os.path.realpath(sys.argv[0]))
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 
 # 일반적으로 영업일은 250일 쯤 된다. 10-fold validation과 비슷하다.
-n_train = dataset.shape[0]-(forecast_ahead*10)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버하는게 중요).
-n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
+n_train = dataset.shape[0]-(forecast_ahead*10)
+n_records = dataset.shape[0]
 average_rmse_list = []
 predictList = []
 forecast_per_week = []
@@ -72,7 +73,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     print("i : %d" % i)
 
     # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+filename+' model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
+    MODEL_DIR = './'+script_name+' model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
     modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
@@ -94,7 +95,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
 
     # create and fit the LSTM network
     model = Sequential()
-    model.add(LSTM(first_layer_node_cnt, input_shape=(look_back, number_of_var), shuffle=False, return_sequences=True))
+    model.add(LSTM(first_layer_node_cnt, batch_input_shape=(number_of_var, look_back, number_of_var), return_sequences=True))
     model.add(Dropout(0.3))
     model.add(Dense(number_of_var))
 
@@ -170,21 +171,21 @@ print("almost %2f minute" % m)
 
 
 # 만약 이 모델이 다른것 보다 rmse가 작아 우수할 경우 재사용. 위는 그냥 다 주석처리해도 상관없다.
-MODEL_DIR = os.getcwd()+'\\'+filename+'model_loopNum'+str(9).zfill(2)+'\\'
-modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
-file_list = os.listdir(MODEL_DIR)  # 루프 가장 마지막 모델 다시 불러오기.
-file_list.sort()
-print(file_list)
-del model       # 테스트를 위해 메모리 내의 모델을 삭제
-model = load_model(MODEL_DIR + file_list[0])
-xhat = dataset[-25:, ]
-fore_predict = numpy.zeros((forecast_ahead, number_of_var))
-for k in range(forecast_ahead):
-    prediction = model.predict(numpy.array([xhat]), batch_size=1)
-    fore_predict[k] = prediction
-    xhat = numpy.vstack([xhat[1:], prediction])
-
-fore_predict = numpy.reshape(fore_predict, (-1, 5))
-forecast_per_week = fore_predict.mean(axis=1)
-forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
-print(forecast_per_week)
+# MODEL_DIR = os.getcwd()+'\\'+script_name+'model_loopNum'+str(9).zfill(2)+'\\'
+# modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+# file_list = os.listdir(MODEL_DIR)  # 루프 가장 마지막 모델 다시 불러오기.
+# file_list.sort()
+# print(file_list)
+# del model       # 테스트를 위해 메모리 내의 모델을 삭제
+# model = load_model(MODEL_DIR + file_list[0])
+# xhat = dataset[-25:, ]
+# fore_predict = numpy.zeros((forecast_ahead, number_of_var))
+# for k in range(forecast_ahead):
+#     prediction = model.predict(numpy.array([xhat]), batch_size=1)
+#     fore_predict[k] = prediction
+#     xhat = numpy.vstack([xhat[1:], prediction])
+#
+# fore_predict = numpy.reshape(fore_predict, (-1, 5))
+# forecast_per_week = fore_predict.mean(axis=1)
+# forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
+# print(forecast_per_week)

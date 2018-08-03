@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-
 import numpy
 import matplotlib.pyplot as plt
 import pandas
 import math
+import tensorflow as tf
 import keras
+from keras import backend as K
+from keras.backend import manual_variable_initialization
+
 from keras.models import Sequential
 from keras.models import load_model
 from keras.layers import Dense, Dropout
@@ -12,12 +15,11 @@ from keras.layers import LSTM
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 import os, sys
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint
+import random as rn
 import time
 
 start_time = time.time()
-
-
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
@@ -38,7 +40,15 @@ class CustomHistory(keras.callbacks.Callback):
 
 
 # fix random seed for reproducibility
+os.environ['PYTHONHASHSEED'] = '0'
 numpy.random.seed(42)
+rn.seed(42)
+session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
+tf.set_random_seed(42)
+sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+K.set_session(sess)
+# manual_variable_initialization(True)
+tf.global_variables_initializer()
 
 # load the dataset
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
@@ -55,7 +65,7 @@ dataset = scaler.fit_transform(dataset)
 number_of_var = len(dataframe.columns)
 look_back = 25  # 기억력은 1달 일 전후라고 치자. timesteps이다.
 forecast_ahead = 25
-num_epochs = 50
+num_epochs = 200
 
 # hyperparameter tuning section
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
@@ -64,8 +74,11 @@ filename = os.path.basename(os.path.realpath(sys.argv[0]))
 n_train = dataset.shape[0] - (forecast_ahead * 10)
 n_records = dataset.shape[0]
 average_rmse_list = []
-predictList = []
 forecast_per_week = []
+
+trainScoreList = []
+valScoreList = []
+testScoreList = []
 print("n_train %d" % n_train)
 print("n_records %d" % n_records)
 # Walk Forward Validation로 robustness 체크해 모델의 우수성 비교. 10-fold validation과 비슷하다. 개념은 아래 출처에서.
@@ -78,9 +91,9 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     MODEL_DIR = './' + filename + ' model_loopNum' + str(len(average_rmse_list)).zfill(2) + '/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+    modelpath = MODEL_DIR + "{epoch:03d}-{val_loss:.9f}.hdf5"
     # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
     # 학습 자동 중단 설정
     # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i - look_back, ], dataset[i - look_back * 2: i, ], dataset[i:i + forecast_ahead, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
@@ -100,9 +113,9 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     model = Sequential()
     for l in range(2):
         model.add(
-            LSTM(32, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
+            LSTM(1000, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
         model.add(Dropout(0.3))
-    model.add(LSTM(32, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
+    model.add(LSTM(1000, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
     model.add(Dropout(0.3))
     model.add(Dense(1))
 
@@ -120,47 +133,65 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     m, s = divmod((time.time() - start_time), 60)
     print("loop num %d take almost %d minute" % (len(average_rmse_list), m))
 
+    file_list = os.listdir(MODEL_DIR)  # 이번 루프 가장 최고 모델 다시 불러오기.
+    file_list.sort()
+
+    for model_file in file_list :
+        print(model_file)
+        # model = load_model(MODEL_DIR + file_list[0])
+        model = load_model(MODEL_DIR + model_file)
+        # make predictions
+        trainPredict = model.predict(trainX, batch_size=1)  # 다음번엔 최소공배수로 예측 되도록 앞쪽 데이터는 좀 잘라두자.
+        valPredict = model.predict(valX, batch_size=1)
+
+        xhat = dataset[i - look_back:i, ]  # test셋의 X값 한 세트(25)가 들어간다. 앞의 1개를 예측하고, 뒤의 1데이터를 없애고 루프.
+        testPredict = numpy.zeros((forecast_ahead, number_of_var))
+        for j in range(forecast_ahead):
+            prediction = model.predict(numpy.array([xhat]), batch_size=1)
+            testPredict[j] = prediction
+            xhat = numpy.vstack([xhat[1:], prediction])  # xhat[0]에 있던 녀석은 빼고 재접합해서 xhat[1:]+predction인걸로 한칸 shift해서 예측.
+
+        # invert predictions and answer
+        trainPredict = scaler.inverse_transform(trainPredict)
+        trainY = scaler.inverse_transform([trainY])
+        valPredict = scaler.inverse_transform(valPredict)
+        valY = scaler.inverse_transform([valY])
+        testPredict = scaler.inverse_transform(testPredict)
+        test = scaler.inverse_transform(test)
+
+        trainScoreList = []  #리스트 초기화
+        valScoreList = []
+        testScoreList = []
+
+        # calculate root mean squared error
+        trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:, 0]))  # evaluate로 대체할 수 없을까?
+        print('Train Score: %.4f RMSE' % trainScore)
+        trainScoreList.append(test)
+
+        valScore = math.sqrt(mean_squared_error(valY[0], valPredict[:, 0]))
+        print('Val Score: %.4f RMSE' % valScore)
+        valScoreList.append(test)
+
+        testScore = math.sqrt(mean_squared_error(test, testPredict[:, 0]))
+        print('Test Score: %.4f RMSE' % testScore) # valScore에 최적합되는 것을 경계해야한다. 방법은?
+        testScoreList.append(test)
+
+
     # epoch가 늘때 마다 train과 val 데이터의 loss가 어떤 양상으로 줄어드는지 확인.
     plt.figure(figsize=(12, 5))
     plt.plot(custom_hist.train_loss)
     plt.plot(custom_hist.val_loss)
-    plt.ylim(0.0, 0.15)
+    plt.plot(trainScoreList)
+    plt.plot(valScoreList)
+    plt.plot(testScoreList)
+    plt.ylim(0.0, 10.0)
     plt.ylabel('loss')
     plt.xlabel('epoch')
-    plt.legend(['train', 'val'], loc='upper left')
+    plt.legend(['loss', 'val_loss', 'trainScore', 'valScore', 'testScore'], loc='upper left')
     plt.show()
 
-    file_list = os.listdir(MODEL_DIR)  # 이번 루프 가장 최고 모델 다시 불러오기.
-    file_list.sort()
-    model = load_model(MODEL_DIR + file_list[0])
-    # make predictions
-    trainPredict = model.predict(trainX, batch_size=1)  # 다음번엔 최소공배수로 예측 되도록 앞쪽 데이터는 좀 잘라두자.
-    valPredict = model.predict(valX, batch_size=1)
+    average_rmse_list.append(numpy.mean(testScoreList))
 
-    xhat = dataset[i - look_back:i, ]  # test셋의 X값 한 세트(25)가 들어간다. 앞의 1개를 예측하고, 뒤의 1데이터를 없애고 루프.
-    testPredict = numpy.zeros((forecast_ahead, number_of_var))
-    for j in range(forecast_ahead):
-        prediction = model.predict(numpy.array([xhat]), batch_size=1)
-        testPredict[j] = prediction
-        xhat = numpy.vstack([xhat[1:], prediction])  # xhat[0]에 있던 녀석은 빼고 재접합해서 xhat[1:]+predction인걸로 한칸 shift해서 예측.
-
-    # invert predictions and answer
-    trainPredict = scaler.inverse_transform(trainPredict)
-    trainY = scaler.inverse_transform([trainY])
-    valPredict = scaler.inverse_transform(valPredict)
-    valY = scaler.inverse_transform([valY])
-    testPredict = scaler.inverse_transform(testPredict)
-    test = scaler.inverse_transform(test)
-
-    # calculate root mean squared error
-    trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:, 0]))  # evaluate로 대체할 수 없을까?
-    print('Train Score: %.4f RMSE' % trainScore)
-    valScore = math.sqrt(mean_squared_error(valY[0], valPredict[:, 0]))
-    print('Val Score: %.4f RMSE' % valScore)
-    testScore = math.sqrt(mean_squared_error(test, testPredict[:, 0]))
-    print('Test Score: %.4f RMSE' % testScore) # valScore에 최적합되는 것을 경계해야한다. 방법은?
-
-    average_rmse_list.append(testScore)
     if i == (n_records - forecast_ahead):  # 루프마지막에.
         plt.figure(figsize=(12, 5)) # 실제와 추정값의 차이를 확인.
         plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
@@ -247,10 +278,11 @@ plt.xlabel('epoch')
 plt.legend(['train', 'val'], loc='upper left')
 plt.show()
 
+K.set_learning_phase(0)
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
 file_list.sort()
 model = load_model(MODEL_DIR + file_list[0])
-
+print(file_list[0])
 trainPredict = model.predict(trainX, batch_size=1)
 valPredict = model.predict(valX, batch_size=1)
 
@@ -273,12 +305,13 @@ print('Train Score: %.4f RMSE' % trainScore)
 valScore = math.sqrt(mean_squared_error(valY[0], valPredict[:, 0]))
 print('Val Score: %.4f RMSE' % valScore)
 
+testPredict = scaler.inverse_transform(testPredict)
+
 plt.figure(figsize=(12, 5))
 plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
 plt.legend()
 plt.show()
 
-testPredict = scaler.inverse_transform(testPredict)
 testPredict = numpy.reshape(testPredict, (-1, 5))
 print(testPredict)
 forecast_per_week = testPredict.mean(axis=1)

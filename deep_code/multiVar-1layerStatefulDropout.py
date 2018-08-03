@@ -38,10 +38,11 @@ class CustomHistory(keras.callbacks.Callback):
 numpy.random.seed(42)
 
 # load the dataset
+# filename = os.getcwd() + '\\full_data_about_iron_ore.csv'
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
-important_featuretop16 = pandas.read_csv("importantFeature_top16.csv")
-# filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
-dataframe = pandas.read_csv(filename, usecols=important_featuretop16) # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
+# important_featuretop16 = pandas.read_csv("importantFeature_top16.csv")
+# dataframe = pandas.read_csv(filename, usecols=important_featuretop16)
+dataframe = pandas.read_csv(filename)
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 
@@ -51,9 +52,9 @@ dataset = scaler.fit_transform(dataset)
 
 # hyperparameter tuning section
 number_of_var = len(dataframe.columns)
-look_back = 25 # 기억력은 1달 전후라고 치자. timesteps다.
+look_back = 25  # 기억력은 1달 전후라고 치자. timesteps다.
 forecast_ahead = 25
-num_epochs = 300
+num_epochs = 50
 # hyperparameter tuning section
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
@@ -106,7 +107,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
 
     for l in range(num_epochs):
         print("epoch %d" % l)
-        model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0,
+        model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0, shuffle=False,
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
