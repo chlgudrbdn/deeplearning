@@ -61,7 +61,7 @@ dataset = scaler.fit_transform(dataset)
 number_of_var = len(dataframe.columns)
 look_back = 25 # 기억력은 1달 전후라고 치자. timesteps다.
 forecast_ahead = 25
-num_epochs = 50
+num_epochs = 160
 # num_epochs = 7
 # hyperparameter tuning section
 # 일반적으로 영업일은 250일 쯤 된다. 10-fold validation과 비슷하다.
@@ -149,9 +149,9 @@ for j in range(forecast_ahead):
 
 # invert predictions and answer
 trainPredict = scaler.inverse_transform(trainPredict)
-trainY = scaler.inverse_transform([trainY])
+trainY = scaler.inverse_transform(trainY)
 valPredict = scaler.inverse_transform(valPredict)
-valY = scaler.inverse_transform([valY])
+valY = scaler.inverse_transform(valY)
 
 # calculate root mean squared error
 trainScore = math.sqrt(mean_squared_error(trainY[0], trainPredict[:, 0]))

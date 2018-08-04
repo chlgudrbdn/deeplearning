@@ -83,15 +83,19 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i-look_back*2, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead, ]
     print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
-    trainX, trainY = create_dataset(train, look_back)
-    valX, valY = create_dataset(val, look_back)
+    # trainX, trainY = create_dataset(train, look_back)
+    # valX, valY = create_dataset(val, look_back)
+    # trainX, trainY =
+    # valX, valY =
     # forecast_ahead와 look_back이 같으니 이번엔 신경쓸거 없지만 다음 회차엔 신경써야한다.
     print('trainX=%s, trainY=%s' % (trainX.shape, trainY.shape))
     print('valX=%s, valY=%s' % (valX.shape, valY.shape))
 
     # reshape input to be [samples, time steps, features]
     trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, number_of_var))
+    trainY = numpy.reshape(trainY, (trainY.shape[0], look_back, number_of_var))
     valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
+    valY = numpy.reshape(valY, (valY.shape[0], look_back, number_of_var))
 
     # create and fit the LSTM network
     model = Sequential()
@@ -104,8 +108,9 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     custom_hist = CustomHistory()
     custom_hist.init()
 
-    model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0,
+    model.fit(trainX, trainY, validation_data=(valX, valY), epochs=num_epochs, batch_size=1, verbose=0, shuffle=False,
               callbacks=[custom_hist, checkpointer])
+    # model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0, callbacks=[custom_hist, checkpointer])
 
     # 5. 학습과정 살펴보기
     plt.plot(custom_hist.train_loss)
