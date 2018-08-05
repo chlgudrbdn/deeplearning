@@ -4,8 +4,11 @@ import numpy
 import matplotlib.pyplot as plt
 import pandas
 import math
+import tensorflow as tf
 import keras
-
+from keras import backend as K
+import random as rn
+from pandas import DataFrame, concat
 from keras.models import Sequential
 from keras.models import load_model
 from keras.layers import Dense, Dropout
@@ -34,8 +37,40 @@ class CustomHistory(keras.callbacks.Callback):
     def on_epoch_end(self, batch, logs={}):
         self.train_loss.append(logs.get('loss'))
         self.val_loss.append(logs.get('val_loss'))
+
+# convert series to supervised learning
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+    n_vars = 1 if type(data) is list else data.shape[1] # 딱히 data의 type이 리스트가 아니면 변수 개수 추출. 리스트라면 1.
+    df = DataFrame(data)
+    cols, names = list(), list()
+    # input sequence (t-n, ... t-1)
+    for i in range(n_in, 0, -1): # 예상에 쓸 t이전 데이터들.
+        cols.append(df.shift(i)) # 일단 사용된 코드에선 1이라고 n_in을 정해서 i는 1뿐. 실제론 더 많은 범위의 데이터를 이용할테니 t-1, t-2...가 t시점의 종속변수에 대응.
+        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)] #
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, n_out): # t +a 앞으로 예상할 범위. 물론 그 예상한 속성들로 종속변수를 계산해야할테니 속성개수만큼 t+a를 예상.
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+    # put it all together
+    agg = concat(cols, axis=1) # axis=1은 좌우로 합치는 의미.
+    agg.columns = names # 이름 부여. (t-1들)
+    # drop rows with NaN values
+    if dropnan:# True로만 되긴 한다.
+        agg.dropna(inplace=True) # dataframe에서 dropna에 inplace=True이면 NA있는 행은 모두 제거.
+    return agg
 # fix random seed for reproducibility
+os.environ['PYTHONHASHSEED'] = '0'
 numpy.random.seed(42)
+rn.seed(42)
+session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
+tf.set_random_seed(42)
+sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+K.set_session(sess)
+# manual_variable_initialization(True)
+tf.global_variables_initializer()
 
 # load the dataset
 # filename = os.getcwd() + '\\full_data_about_iron_ore.csv'
@@ -51,8 +86,8 @@ dataset = scaler.fit_transform(dataset)
 
 # hyperparameter tuning section
 number_of_var = len(dataframe.columns)
-look_back = 1  # 기억력은 1달 일 전후라고 치자. timesteps다.
-forecast_ahead = 1
+look_back = 25  # 기억력은 1달 일 전후라고 치자. timesteps다.
+forecast_ahead = 15
 num_epochs = 1
 # hyperparameter tuning section
 script_name = os.path.basename(os.path.realpath(sys.argv[0]))
@@ -83,10 +118,9 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i-look_back*2, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead, ]
     print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
-    # trainX, trainY = create_dataset(train, look_back)
-    # valX, valY = create_dataset(val, look_back)
-    # trainX, trainY =
-    # valX, valY =
+    trainX, trainY = create_dataset(train, look_back)
+    valX, valY = create_dataset(val, look_back)
+    # trainX, trainY = train[:, :]
     # forecast_ahead와 look_back이 같으니 이번엔 신경쓸거 없지만 다음 회차엔 신경써야한다.
     print('trainX=%s, trainY=%s' % (trainX.shape, trainY.shape))
     print('valX=%s, valY=%s' % (valX.shape, valY.shape))
