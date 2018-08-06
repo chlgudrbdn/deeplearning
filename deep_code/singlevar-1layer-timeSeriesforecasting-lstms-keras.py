@@ -1,21 +1,22 @@
-#-*- coding: utf-8 -*-
-# https://m.blog.naver.com/silvury/220939233742
-# https://machinelearningmastery.com/time-series-prediction-lstm-recurrent-neural-networks-python-keras/
-
+# -*- coding: utf-8 -*-
 import numpy
 import matplotlib.pyplot as plt
 import pandas
 import math
+import tensorflow as tf
+import keras
+from keras import backend as K
+from keras.backend import manual_variable_initialization
+
 from keras.models import Sequential
 from keras.models import load_model
-from keras.layers import Dense
+from keras.layers import Dense, Dropout
 from keras.layers import LSTM
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
 import os, sys
-from keras.callbacks import ModelCheckpoint,EarlyStopping
-from matplotlib import pyplot
+from keras.callbacks import ModelCheckpoint, EarlyStopping
+import random as rn
 import time
 start_time = time.time()
 # convert an array of values into a dataset matrix
@@ -26,8 +27,25 @@ def create_dataset(dataset, look_back=1):
         dataY.append(dataset[i + look_back, 0]) # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return numpy.array(dataX), numpy.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
+class CustomHistory(keras.callbacks.Callback):
+    def init(self):
+        self.train_loss = []
+        self.val_loss = []
+
+    def on_epoch_end(self, batch, logs={}):
+        self.train_loss.append(logs.get('loss'))
+        self.val_loss.append(logs.get('val_loss'))
+
 # fix random seed for reproducibility
+os.environ['PYTHONHASHSEED'] = '0'
 numpy.random.seed(42)
+rn.seed(42)
+session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
+tf.set_random_seed(42)
+sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+K.set_session(sess)
+# manual_variable_initialization(True)
+tf.global_variables_initializer()
 
 # load the dataset
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
@@ -43,8 +61,8 @@ dataset = scaler.fit_transform(dataset)
 # hyperparameter tuning section
 number_of_var = len(dataframe.columns)
 look_back = 25 # 기억력은 1달 일 전후라고 치자. timesteps다.
-forecast_ahead = 25
-
+forecast_ahead = 15
+num_epochs = 1
 # hyperparameter tuning section
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
 
@@ -54,6 +72,10 @@ n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 
 average_rmse_list = []
 predictList = []
 forecast_per_week = []
+
+trainScoreList = []
+valScoreList = []
+testScoreList = []
 print("n_train %d" % n_train)
 print("n_records %d" % n_records)
 # Walk Forward Validation로 robustness 체크해 모델의 우수성 비교. 개념은 아래 출처에서.
@@ -70,7 +92,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     # 모델 업데이트 및 저장
     checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=50)
+    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i-look_back*2, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead,] # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
     print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
     trainX, trainY = create_dataset(train, look_back)
@@ -93,7 +115,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     model.compile(loss='mean_squared_error', optimizer='adam')
     # model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)
     # model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
-    hist = model.fit(trainX, trainY, validation_data=(valX, valY), nb_epoch=200, batch_size=1, verbose=0,
+    hist = model.fit(trainX, trainY, validation_data=(valX, valY), nb_epoch=num_epochs, batch_size=1, verbose=0,
                      callbacks=[early_stopping_callback, checkpointer])
     # verbose : 얼마나 자세하게 정보를 표시할 것인가를 지정. (0, 1, 2)  0 = silent, 1 = progress bar, 2 = one line per epoch.
     # make predictions

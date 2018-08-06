@@ -65,8 +65,8 @@ dataset = scaler.fit_transform(dataset)
 number_of_var = len(dataframe.columns)
 look_back = 25 # 기억력은 1달 일 전후라고 치자. timesteps이다.
 forecast_ahead = 15
-# num_epochs = 160
-num_epochs = 1
+num_epochs = 160
+# num_epochs = 1
 
 # hyperparameter tuning section
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
@@ -94,7 +94,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
         os.mkdir(MODEL_DIR)
     modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
     # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
     # 학습 자동 중단 설정
     # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i - look_back, ], dataset[i - look_back * 2: i, ], dataset[i:i + forecast_ahead, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
@@ -135,9 +135,18 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     m, s = divmod((time.time() - start_time), 60)
     print("loop num %d take almost %d minute" % (len(average_rmse_list), m))
 
+    trainY = scaler.inverse_transform(trainY)
+    valY = scaler.inverse_transform(valY)
+    test = scaler.inverse_transform(test)
+
+    trainScoreList = []  # 리스트 초기화
+    valScoreList = []
+    testScoreList = []
+
     file_list = os.listdir(MODEL_DIR)  # 이번 루프 가장 최고 모델 다시 불러오기.
-    file_list.sort()
-    for model_file in file_list :
+    file_list.sort(key=lambda x: os.path.getmtime(MODEL_DIR + x))  # 만든날짜 정렬
+
+    for model_file in file_list:
         print(model_file)
         # model = load_model(MODEL_DIR + file_list[0])
         model = load_model(MODEL_DIR + model_file)
@@ -154,15 +163,8 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
 
         # invert predictions and answer
         trainPredict = scaler.inverse_transform(trainPredict)
-        trainY = scaler.inverse_transform(trainY)
         valPredict = scaler.inverse_transform(valPredict)
-        valY = scaler.inverse_transform(valY)
         testPredict = scaler.inverse_transform(testPredict)
-        test = scaler.inverse_transform(test)
-
-        trainScoreList = []  #리스트 초기화
-        valScoreList = []
-        testScoreList = []
 
         # calculate root mean squared error
         trainScore = math.sqrt(mean_squared_error(trainY, trainPredict[:, 0]))  # evaluate로 대체할 수 없을까?
@@ -176,16 +178,27 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
         testScoreList.append(testScore)
 
     # epoch가 늘때 마다 train과 val 데이터의 loss가 어떤 양상으로 줄어드는지 확인.
-    plt.figure(figsize=(12, 5))
+    fig, ax1 = plt.subplots()
+    t = range(num_epochs)
+    ax1.set_xlabel('epochs')
+    ax1.set_ylabel('loss', color='tab:black')
+    ax1.plot(t, custom_hist.train_loss, color='tab:blue')
+    ax1.plot(t, custom_hist.val_loss, color='tab:orange')
+    ax1.tick_params(axis='y', labelcolor='tab:black')
+
+    ax2 = ax1.twinx()
+
+    ax2.set_ylabel('RMSE', color='tab:black')
     # plt.plot(custom_hist.train_loss)
     # plt.plot(custom_hist.val_loss)
-    plt.plot(trainScoreList)
-    plt.plot(valScoreList)
-    plt.plot(testScoreList)
+    ax2.plot(t, trainScoreList, color='tab:purple')
+    ax2.plot(t, valScoreList, color='tab:green')
+    ax2.plot(t, testScoreList, color='tab:red')
+    ax2.tick_params(axis='y', labelcolor='tab:black')
     # # plt.ylim(0.0, 10.0)
-    plt.ylabel('RMSE')
-    plt.xlabel('epoch')
-    plt.legend(['trainScore', 'valScore', 'testScore'], loc='upper left')
+    fig.tight_layout()
+    # plt.xlabel('epoch')
+    plt.legend(['loss', 'val_loss', 'trainScore', 'valScore', 'testScore'], loc='upper left')
     plt.show()
 
     print("testScoreList")
@@ -215,7 +228,17 @@ m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
 
 
-
+# plt.figure(figsize=(12, 5))
+# plt.plot(cus/tom_hist.train_loss)
+# plt.plot(custom_hist.val_loss)
+plt.plot(trainScoreList)
+plt.plot(valScoreList)
+plt.plot(testScoreList)
+# plt.ylim(0.0, 0.025)
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['trainScore', 'valScore', 'testScore'], loc='upper left')
+plt.show()
 
 
 

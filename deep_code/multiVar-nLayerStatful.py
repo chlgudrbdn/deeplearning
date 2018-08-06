@@ -1,23 +1,25 @@
-#-*- coding: utf-8 -*-
-
-# 0. 사용할 패키지 불러오기
-import keras
-import numpy as np
-from keras.models import Sequential
-from keras.layers import Dense, LSTM
-from keras.utils import np_utils
-from sklearn.preprocessing import MinMaxScaler
-import os, sys
+# -*- coding: utf-8 -*-
+import numpy
+import matplotlib.pyplot as plt
 import pandas
 import math
-from keras.callbacks import ModelCheckpoint,EarlyStopping
-from sklearn.metrics import mean_squared_error
-from matplotlib import pyplot
-from keras.models import load_model
+import tensorflow as tf
+import keras
+from keras import backend as K
+from keras.backend import manual_variable_initialization
 
+from keras.models import Sequential
+from keras.models import load_model
+from keras.layers import Dense, Dropout
+from keras.layers import LSTM
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+import os, sys
+from keras.callbacks import ModelCheckpoint, EarlyStopping
+import random as rn
 import time
+
 start_time = time.time()
-np.random.seed(42)
 
 # 손실 이력 클래스 정의
 class LossHistory(keras.callbacks.Callback):
@@ -44,9 +46,20 @@ def create_dataset(data, window_size):
         dataY.append(dataset[i + window_size, ])  # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return np.array(dataX), np.array(dataY) # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦.
 
+# fix random seed for reproducibility
+os.environ['PYTHONHASHSEED'] = '0'
+numpy.random.seed(42)
+rn.seed(42)
+session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
+tf.set_random_seed(42)
+sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+K.set_session(sess)
+# manual_variable_initialization(True)
+tf.global_variables_initializer()
+
 # 1. 데이터 준비하기
 # 하이퍼 파라미터 정의
-window_size=25 # look_back과 같다
+window_size = 25 # look_back과 같다
 forecast_ahead = 35
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
 num_epochs = 300
