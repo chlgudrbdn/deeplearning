@@ -259,3 +259,15 @@ plt.show()
 # forecast_per_week = fore_predict.mean(axis=1)
 # forecast_per_week = [round(elem, 2) for elem in forecast_per_week]
 # print(forecast_per_week)
+# trainScoreList.to_csv('trainScoreList.csv', encoding='utf-8')
+# valScoreList.to_csv('valScoreList.csv', encoding='utf-8')
+# testScoreList.to_csv('testScoreList.csv', encoding='utf-8')
+
+# modified_date =[]
+# for model_file in file_list:
+#     date = os.path.getmtime(MODEL_DIR + model_file)
+#     modified_date.append(date)
+# ScoreList = [trainScoreList, valScoreList, testScoreList, file_list, modified_date]
+# new_Score_list = pandas.DataFrame(data=ScoreList)
+# new_Score_list.to_csv('Score.csv', encoding='utf-8')
+
