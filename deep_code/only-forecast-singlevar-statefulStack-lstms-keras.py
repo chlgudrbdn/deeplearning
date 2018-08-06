@@ -74,7 +74,7 @@ filename = os.path.basename(os.path.realpath(sys.argv[0]))
 # 일반적으로 영업일은 250일 쯤 된다. 10-fold validation과 비슷하다.
 n_train = dataset.shape[0] - (forecast_ahead * 10)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버하는게 중요).
 n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
-# average_rmse_list = []
+average_rmse_list = []
 predictList = []
 forecast_per_week = []
 
@@ -96,7 +96,7 @@ if not os.path.exists(MODEL_DIR):
 modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
 checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
 # 학습 자동 중단 설정
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
+# early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
 train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back * 2: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
 print('train=%d, val=%d' % (len(train), len(val)))
 trainX, trainY = create_dataset(train, look_back)
@@ -111,15 +111,12 @@ valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
 
 # create and fit the LSTM network
 model = Sequential()
-model.add(LSTM(320, input_shape=(look_back, number_of_var)))
-model.add(Dropout(0.3))
-model.add(Dense(160))
-model.add(Dropout(0.3))
-model.add(Dense(80))
-model.add(Dropout(0.3))
-model.add(Dense(40))
-model.add(Dropout(0.3))
-model.add(Dense(20))
+model = Sequential()
+for l in range(2):
+    model.add(
+        LSTM(320, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
+    model.add(Dropout(0.5))
+model.add(LSTM(320, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
 model.add(Dropout(0.3))
 model.add(Dense(1))
 model.compile(loss='mean_squared_error', optimizer='adam')
@@ -127,15 +124,18 @@ model.compile(loss='mean_squared_error', optimizer='adam')
 custom_hist = CustomHistory()
 custom_hist.init()
 
+# model.fit(trainX, trainY, nb_epoch=100, batch_size=1, verbose=2)
+# model.fit(trainX,trainY,nb_epoch=100,validation_split=0.2,verbose=2,callbacks=[early_stopping_callback,checkpointer])
 for l in range(num_epochs):
     print("epoch %d" % l)
     model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0,
               callbacks=[custom_hist, checkpointer])
     model.reset_states()
+
 # make predictions
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
-print("almost %d minute" % m)
+print("loop num %d take almost %d minute" % (len(average_rmse_list), m))
 
 trainY = scaler.inverse_transform(trainY)
 valY = scaler.inverse_transform(valY)

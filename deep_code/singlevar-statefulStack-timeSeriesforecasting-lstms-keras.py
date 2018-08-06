@@ -144,7 +144,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     testScoreList = []
 
     file_list = os.listdir(MODEL_DIR)  # 이번 루프 가장 최고 모델 다시 불러오기.
-    file_list.sort(key=lambda x: os.path.getmtime(MODEL_DIR + x))  # 만든날짜 정렬
+    file_list.sort()  # 만든날짜 정렬
 
     for model_file in file_list:
         print(model_file)
@@ -178,28 +178,28 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
         testScoreList.append(testScore)
 
     # epoch가 늘때 마다 train과 val 데이터의 loss가 어떤 양상으로 줄어드는지 확인.
-    fig, ax1 = plt.subplots()
-    t = range(num_epochs)
-    ax1.set_xlabel('epochs')
-    ax1.set_ylabel('loss', color='tab:black')
-    ax1.plot(t, custom_hist.train_loss, color='tab:blue')
-    ax1.plot(t, custom_hist.val_loss, color='tab:orange')
-    ax1.tick_params(axis='y', labelcolor='tab:black')
-
-    ax2 = ax1.twinx()
-
-    ax2.set_ylabel('RMSE', color='tab:black')
-    # plt.plot(custom_hist.train_loss)
-    # plt.plot(custom_hist.val_loss)
-    ax2.plot(t, trainScoreList, color='tab:purple')
-    ax2.plot(t, valScoreList, color='tab:green')
-    ax2.plot(t, testScoreList, color='tab:red')
-    ax2.tick_params(axis='y', labelcolor='tab:black')
-    # # plt.ylim(0.0, 10.0)
-    fig.tight_layout()
-    # plt.xlabel('epoch')
-    plt.legend(['loss', 'val_loss', 'trainScore', 'valScore', 'testScore'], loc='upper left')
-    plt.show()
+    # fig, ax1 = plt.subplots()
+    # t = range(num_epochs)
+    # ax1.set_xlabel('epochs')
+    # ax1.set_ylabel('loss', color='tab:black')
+    # ax1.plot(t, custom_hist.train_loss, color='tab:blue')
+    # ax1.plot(t, custom_hist.val_loss, color='tab:orange')
+    # ax1.tick_params(axis='y', labelcolor='tab:black')
+    #
+    # ax2 = ax1.twinx()
+    #
+    # ax2.set_ylabel('RMSE', color='tab:black')
+    # # plt.plot(custom_hist.train_loss)
+    # # plt.plot(custom_hist.val_loss)
+    # ax2.plot(t, trainScoreList, color='tab:purple')
+    # ax2.plot(t, valScoreList, color='tab:green')
+    # ax2.plot(t, testScoreList, color='tab:red')
+    # ax2.tick_params(axis='y', labelcolor='tab:black')
+    # # # plt.ylim(0.0, 10.0)
+    # fig.tight_layout()
+    # # plt.xlabel('epoch')
+    # plt.legend(['loss', 'val_loss', 'trainScore', 'valScore', 'testScore'], loc='upper left')
+    # plt.show()
 
     print("testScoreList")
     print(testScoreList)
@@ -216,8 +216,6 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
         print(testPredict.shape)
         forecast_per_week = testPredict.mean(axis=1)
 
-# print('average loss list:', end=" ")
-# print(average_rmse_list)
 print('average loss: %.9f' % numpy.mean(average_rmse_list))
 forecast_per_week = [round(n, 2) for n in forecast_per_week]
 print('forecast_per_week: ', end=" ")
@@ -228,7 +226,7 @@ m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
 
 
-# plt.figure(figsize=(12, 5))
+plt.figure(figsize=(12, 5))
 # plt.plot(cus/tom_hist.train_loss)
 # plt.plot(custom_hist.val_loss)
 plt.plot(trainScoreList)
@@ -239,103 +237,3 @@ plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['trainScore', 'valScore', 'testScore'], loc='upper left')
 plt.show()
-
-
-
-
-##########--------------------------##########
-# 나중에 모듈로 만들게 이 모델이 다른것 보다 average rmse가 작아 우수할 경우 재사용. 위는 그냥 다 주석처리해도 상관없게 코딩해야한다.
-# 모델 저장 폴더 만들기
-# filename = os.path.basename(os.path.realpath(sys.argv[0]))
-# filename = 'singlevar-statefulStack-timeSeriesforecasting-lstms-keras.py'
-# MODEL_DIR = './' + filename + ' model_loopNum10/'
-# if not os.path.exists(MODEL_DIR):
-#     os.mkdir(MODEL_DIR)
-# modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
-# # 모델 업데이트 및 저장
-# checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
-#
-# train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back * 2: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
-# print('train=%d, val=%d' % (len(train), len(val)))
-# trainX, trainY = create_dataset(train, look_back)
-# valX, valY = create_dataset(val, look_back)
-# print('trainX=%s, trainY=%s' % (trainX.shape, trainY.shape))
-# print('valX=%s, valY=%s' % (valX.shape, valY.shape))
-#
-# # reshape input to be [samples, time steps, features]
-# trainX = numpy.reshape(trainX, (trainX.shape[0], look_back, number_of_var))
-# valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
-# # testX = numpy.reshape(testX, (testX.shape[0], look_back, number_of_var))
-#
-# # create and fit the LSTM network
-# model = Sequential()
-# for l in range(2):
-#     model.add(
-#         LSTM(32, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
-#     model.add(Dropout(0.3))
-# model.add(LSTM(32, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
-# model.add(Dropout(0.3))
-# model.add(Dense(1))
-#
-# model.compile(loss='mean_squared_error', optimizer='adam')
-#
-# custom_hist = CustomHistory()
-# custom_hist.init()
-#
-# for l in range(num_epochs):
-#     print("epoch %d" % l)
-#     model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0,
-#               callbacks=[custom_hist, checkpointer])
-#     model.reset_states()
-#
-# print("--- %s seconds ---" % (time.time() - start_time))
-# m, s = divmod((time.time() - start_time), 60)
-# print("almost %2f minute" % m)
-#
-# plt.plot(custom_hist.train_loss)
-# plt.plot(custom_hist.val_loss)
-# plt.ylim(0.0, 0.15)
-# plt.ylabel('loss')
-# plt.xlabel('epoch')
-# plt.legend(['train', 'val'], loc='upper left')
-# plt.show()
-#
-# K.set_learning_phase(0)
-# file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-# file_list.sort()
-# model = load_model(MODEL_DIR + file_list[0])
-# print(file_list[0])
-# trainPredict = model.predict(trainX, batch_size=1)
-# valPredict = model.predict(valX, batch_size=1)
-#
-# xhat = dataset[i - look_back:i, ]  # test셋의 X값 한 세트가 들어간다. 이경우는 값 1개만 예측하면 그만이라지만 좀더 생각해볼 필요가 있다.
-# testPredict = numpy.zeros((forecast_ahead, number_of_var))
-# for j in range(forecast_ahead):
-#     prediction = model.predict(numpy.array([xhat]), batch_size=25)
-#     testPredict[j] = prediction
-#     xhat = numpy.vstack([xhat[1:], prediction])  # xhat[0]에 있던 녀석은 빼고 재접합해서 xhat[1:]+predction인걸로 한칸 shift해서 예측.
-#
-# # invert predictions and answer
-# trainPredict = scaler.inverse_transform(trainPredict)
-# trainY = scaler.inverse_transform(trainY)
-# valPredict = scaler.inverse_transform(valPredict)
-# valY = scaler.inverse_transform(valY)
-#
-# # calculate root mean squared error
-# trainScore = math.sqrt(mean_squared_error(trainY, trainPredict[:, 0]))
-# print('Train Score: %.4f RMSE' % trainScore)
-# valScore = math.sqrt(mean_squared_error(valY, valPredict[:, 0]))
-# print('Val Score: %.4f RMSE' % valScore)
-#
-# testPredict = scaler.inverse_transform(testPredict)
-#
-# plt.figure(figsize=(12, 5))
-# plt.plot(numpy.arange(forecast_ahead), testPredict, 'r', label="prediction")
-# plt.legend()
-# plt.show()
-#
-# testPredict = numpy.reshape(testPredict, (-1, 5))
-# print(testPredict)
-# forecast_per_week = testPredict.mean(axis=1)
-# forecast_per_week = [round(n, 2) for n in forecast_per_week]
-# print(forecast_per_week)
