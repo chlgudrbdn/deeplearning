@@ -74,8 +74,6 @@ filename = os.path.basename(os.path.realpath(sys.argv[0]))
 # 일반적으로 영업일은 250일 쯤 된다. 10-fold validation과 비슷하다.
 n_train = dataset.shape[0] - (forecast_ahead * 10)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버하는게 중요).
 n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
-average_rmse_list = []
-predictList = []
 forecast_per_week = []
 
 trainScoreList = []
@@ -94,7 +92,7 @@ MODEL_DIR = './'+filename+' model_loopNum 10/'
 if not os.path.exists(MODEL_DIR):
     os.mkdir(MODEL_DIR)
 modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
+checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
 # 학습 자동 중단 설정
 # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
 train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back * 2: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
@@ -135,7 +133,7 @@ for l in range(num_epochs):
 # make predictions
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
-print("loop num %d take almost %d minute" % (len(average_rmse_list), m))
+print("take almost %d minute" % m)
 
 trainY = scaler.inverse_transform(trainY)
 valY = scaler.inverse_transform(valY)

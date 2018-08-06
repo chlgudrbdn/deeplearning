@@ -94,7 +94,7 @@ MODEL_DIR = './'+filename+' model_loopNum 10/'
 if not os.path.exists(MODEL_DIR):
     os.mkdir(MODEL_DIR)
 modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
+checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
 # 학습 자동 중단 설정
 early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
 train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back * 2: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
