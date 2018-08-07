@@ -41,5 +41,5 @@ new_menu_list = sequence.pad_sequences(new_menu_list, maxlen=MaxLength)
 new_menu_list = pandas.DataFrame(data=new_menu_list)
 new_menu_list.to_csv('menu_preprocessed.csv', encoding='utf-8')
 
-dataframe.merge(new_menu_list, )
+# dataframe.merge(new_menu_list, )
 
