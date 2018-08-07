@@ -109,7 +109,6 @@ valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
 
 # create and fit the LSTM network
 model = Sequential()
-model = Sequential()
 for l in range(2):
     model.add(
         LSTM(320, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))

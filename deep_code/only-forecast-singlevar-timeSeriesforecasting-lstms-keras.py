@@ -127,11 +127,9 @@ model.compile(loss='mean_squared_error', optimizer='adam')
 custom_hist = CustomHistory()
 custom_hist.init()
 
-for l in range(num_epochs):
-    print("epoch %d" % l)
-    model.fit(trainX, trainY, validation_data=(valX, valY), epochs=1, batch_size=1, verbose=0,
-              callbacks=[custom_hist, checkpointer])
-    model.reset_states()
+model.fit(trainX, trainY, validation_data=(valX, valY), epochs=num_epochs, batch_size=1, verbose=0,
+          callbacks=[early_stopping_callback, checkpointer, custom_hist])
+
 # make predictions
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
