@@ -174,7 +174,8 @@ for model_file in file_list:
     plt.show()
 
     testPredict = numpy.reshape(testPredict, (-1, 5))
-    # print(testPredict.shape)
+    print("testPredict")
+    print(testPredict)
     forecast_per_week = testPredict.mean(axis=1)
     forecast_per_week = [round(n, 2) for n in forecast_per_week]
     print('forecast_per_week: ', end=" ")

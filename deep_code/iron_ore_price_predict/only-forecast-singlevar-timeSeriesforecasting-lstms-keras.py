@@ -175,7 +175,8 @@ for model_file in file_list:
     plt.show()
 
     testPredict = numpy.reshape(testPredict, (-1, 5))
-    # print(testPredict.shape)
+    print("testPredict")
+    print(testPredict)
     forecast_per_week = testPredict.mean(axis=1)
     forecast_per_week = [round(n, 2) for n in forecast_per_week]
     print('forecast_per_week: ', end=" ")
@@ -185,7 +186,7 @@ plt.figure(figsize=(12, 5))  # 실제와 추정값의 차이를 확인.
 plt.plot(trainScoreList)
 plt.plot(valScoreList)
 plt.ylabel('RMSE')
-plt.xlabel('epoch')
+plt.xlabel('val loss order')
 plt.legend(['trainScore', 'valScore'], loc='upper left')
 plt.show()
 
