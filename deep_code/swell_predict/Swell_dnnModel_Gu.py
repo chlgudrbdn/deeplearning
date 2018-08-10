@@ -13,22 +13,22 @@ import random as rn
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-
-# def swell_eval(y_true, y_pred):
-#     print(y_true.info())
-#     Score = 0
-#     if y_true == 0:
-#         if y_true == y_pred:
-#             Score = Score+1
-#         else:
-#             Score = Score-1
-#     else:
-#         if y_true == y_pred:
-#             Score = Score+2
-#         else:
-#             Score = Score-2
-#     return K.sum(K.equal(y_true, K.round(y_pred)), axis=-1)
-
+"""
+def swell_eval(y_true, y_pred):
+    print(y_true.info())
+    Score = 0
+    if y_true == 0:
+        if y_true == y_pred:
+            Score = Score+1
+        else:
+            Score = Score-1
+    else:
+        if y_true == y_pred:
+            Score = Score+2
+        else:
+            Score = Score-2
+    return K.sum(K.equal(y_true, K.round(y_pred)), axis=-1)
+"""
 
 # fix random seed for reproducibility
 seed = 42
