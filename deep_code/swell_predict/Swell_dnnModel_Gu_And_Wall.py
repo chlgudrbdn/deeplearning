@@ -16,6 +16,8 @@ import random as rn
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+import time
+start_time = time.time()
 """
 def swell_eval(y_true, y_pred):
     print(y_true.info())
@@ -81,7 +83,7 @@ number_of_var = len(X_train_df.columns)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
 epochs = 300
-n_fold = 10
+n_fold = 100
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
 # 빈 accuracy 배열
@@ -112,26 +114,29 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     # # 모델 업데이트 및 저장
     # checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=100)
+    early_stopping_callback = EarlyStopping(monitor='val_acc', patience=300)
 
     history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=2, callbacks=[early_stopping_callback])
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(5, 5))
+    plt.figure(figsize=(10, 10))
     # 테스트 셋의 오차
     y_vloss = history.history['val_loss']
-    # 학습셋의 오차
+    y_vacc = history.history['val_acc']
     y_loss = history.history['loss']
+    y_acc = history.history['acc']
     # 그래프로 표현
     x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_vloss, marker='.', c="red", label='Testset_loss')
-    plt.plot(x_len, y_loss, marker='.', c="blue", label='Trainset_loss')
+    plt.plot(x_len, y_vacc, c="red", label='val_acc')
+    plt.plot(x_len, y_acc, c="blue", label='acc')
+    plt.plot(x_len, y_vloss, c="green", label='loss')
+    plt.plot(x_len, y_loss, c="orange", label='val_loss')
 
     # 그래프에 그리드를 주고 레이블을 표시
-    plt.legend(loc='upper right')
+    plt.legend(loc='upper left')
     plt.grid()
     plt.xlabel('epoch')
-    plt.ylabel('loss')
+    plt.ylabel('acc')
     plt.show()
 
     Score = model.evaluate(X_Validation, Y_Validation)
@@ -143,5 +148,8 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
 
 print("\n %.f fold accuracy:" % n_fold, accuracy)
 accuracy = [float(j) for j in accuracy]
-print("mean accuracy %.f:" % np.mean(accuracy))
+print("mean accuracy %.7f:" % np.mean(accuracy))
 
+print("--- %s seconds ---" % (time.time() - start_time))
+m, s = divmod((time.time() - start_time), 60)
+print("almost %2f minute" % m)

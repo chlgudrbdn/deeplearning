@@ -82,8 +82,8 @@ Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
 number_of_var = len(X_train_df.columns)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 10
-patience_num = 5
+epochs = 300
+patience_num = 100
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
@@ -151,3 +151,6 @@ print("\n %.f fold accuracy:" % n_fold, accuracy)
 accuracy = [float(j) for j in accuracy]
 print("mean accuracy %.7f:" % np.mean(accuracy))
 
+print("--- %s seconds ---" % (time.time() - start_time))
+m, s = divmod((time.time() - start_time), 60)
+print("almost %2f minute" % m)
