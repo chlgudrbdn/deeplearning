@@ -17,13 +17,13 @@ dataset = dataframe.values
 # normalize the dataset
 # scaler = MinMaxScaler(feature_range=(0, 1))
 menu = dataset[:, 3]
-menu_dictionary = set(['깍두기(손칼)'])
+menu_set = set(['깍두기(손칼)'])
 for menus in menu:
     menu_elem = menus.split(",")
-    menu_dictionary = menu_dictionary.union(set(menu_elem))  # 메뉴 총 개수 1878. 한끼에 최대 메뉴 19
+    menu_set = menu_set.union(set(menu_elem))  # 메뉴 총 개수 1878. 한끼에 최대 메뉴 19
 
-MenuList = list(menu_dictionary)
-menu_dict = dict(list(zip(MenuList, range(len(MenuList)))))
+Menu_list = list(menu_set)
+menu_dict = dict(list(zip(Menu_list, range(len(Menu_list)))))
 new_menu_list = []
 MaxLength = 0
 for menus in menu:
@@ -38,7 +38,7 @@ for menus in menu:
 print(MaxLength)
 # new_menu_list = numpy.asarray(new_menu_list)
 new_menu_list = sequence.pad_sequences(new_menu_list, maxlen=MaxLength)
-new_menu_list = pandas.DataFrame(data=new_menu_list)
+new_menu_list = pandas.DataFrame(data=new_menu_list, index=list(dataframe['일자']))
 new_menu_list.to_csv('menu_preprocessed.csv', encoding='utf-8')
 
 # dataframe.merge(new_menu_list, )

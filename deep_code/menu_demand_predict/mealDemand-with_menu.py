@@ -7,7 +7,7 @@ from keras.layers import Dense, Dropout, Activation
 from keras.layers import Embedding
 from keras.layers import LSTM
 from keras.layers import Conv1D, MaxPooling1D
-
+from sklearn.preprocessing import MinMaxScaler
 from keras import backend as K
 import numpy, os, sys
 import tensorflow as tf
@@ -26,17 +26,18 @@ K.set_session(sess)
 tf.global_variables_initializer()
 
 # load the dataset
-# filename = os.getcwd() + '\menu_preprocessed.csv'
-filename = os.getcwd() + '\dataset\menu_preprocessed.csv'
-menu_dataframe = pandas.read_csv(filename, index_col=[0], header=0)
-menu_dataset = menu_dataframe.values
-menu_dataset = menu_dataset.astype('float32')
-
+filename = os.getcwd() + '\menu_preprocessed.csv'
+# filename = os.getcwd() + '\dataset\menu_preprocessed.csv'
+menu_df = pandas.read_csv(filename, index_col=[0], header=0)
+menu_as_number_data = menu_df.values
+menu_as_number_data = menu_as_number_data.astype('float32')
+scaler = MinMaxScaler(feature_range=(0, 1))
+menu_as_float_data = scaler.fit_transform(menu_as_number_data)
 
 # 데이터 전처리
 x_train = sequence.pad_sequences(x_train, maxlen=100)
 x_val = sequence.pad_sequences(x_test, maxlen=100)
-
+'''
 # 모델의 설정
 model = Sequential()
 model.add(Embedding(1878, 19))
@@ -78,3 +79,4 @@ plt.grid()
 plt.xlabel('epoch')
 plt.ylabel('loss')
 plt.show()
+'''
