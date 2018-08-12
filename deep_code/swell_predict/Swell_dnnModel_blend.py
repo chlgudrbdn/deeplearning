@@ -203,3 +203,7 @@ print("mean accuracy %.7f:" % np.mean(accuracy))
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %2f minute" % m)
+
+for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
+    print("loop num : ", len(accuracy))
+    print("TRAIN:", train_index, "TEST:", validation_index)

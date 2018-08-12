@@ -52,7 +52,7 @@ test_dates = pd.read_csv('test_form.csv', usecols=[0], skiprows=[0, 1])
 test_dates = test_dates.values.flatten().tolist()  # 제출해야할 날짜.
 # {'2015-07-18', '2015-06-27', '2014-12-21', '2014-09-25', '2016-03-04', '2015-04-04', '2014-07-06', '2014-05-18', '2014-10-23', '2016-10-20', '2015-12-13', '2015-01-13', '2017-03-15'}는 이 데이터 셋에선 test 못함.
 # 데이터 불러오기
-X_df = pd.read_csv('independent_var_with_Gu_and_Wall.csv', index_col=[0])
+X_df = pd.read_csv('independent_var_with.csv', index_col=[0])
 
 X_df_index = set(X_df.index.values) - set(test_dates)  # 측정해야할 날짜는 뺀다.
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 날짜.
@@ -63,8 +63,6 @@ abnormal_date = set(abnormal_date).intersection(X_df_index)
 swell_date = pd.read_csv('only_swell_date_data.csv', index_col=[0]).values.flatten().tolist()
 swell_date = set(swell_date).intersection(X_df_index)
 print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
-
-
 
 # 오버 샘플링 없이 모든 데이터 사용.
 normal_date_X_df = X_df.loc[normal_date]
@@ -141,7 +139,6 @@ filename = os.path.basename(os.path.realpath(sys.argv[0]))
 
 # 모델의 설정, 컴파일, 실행
 for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
-    print("loop num : ", len(accuracy))
     print("TRAIN:", train_index, "TEST:", validation_index)
     X_train, X_Validation = X[train_index], X[validation_index]
     Y_train, Y_Validation = Y[train_index], Y[validation_index]
