@@ -18,10 +18,11 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import time
 start_time = time.time()
-'''
+"""
 def swell_eval(y_true, y_pred):
+    print(y_true.info())
     Score = 0
-    if K.equal(y_true, K.variable(0)):
+    if y_true == 0:
         if y_true == y_pred:
             Score = Score+1
         else:
@@ -31,23 +32,8 @@ def swell_eval(y_true, y_pred):
             Score = Score+2
         else:
             Score = Score-2
-    return K.variable(Score)
-'''
-
-def score_calculating(true_value, pred_value):
-    Score = 0
-
-    # if K.equal(, K.variable(0)):
-    #     if y_true == y_pred:
-    #         Score = Score + 1
-    #     else:
-    #         Score = Score - 1
-    # else:
-    #     if y_true == y_pred:
-    #         Score = Score + 2
-    #     else:
-    #         Score = Score - 2
-    return K.variable(Score)
+    return K.sum(K.equal(y_true, K.round(y_pred)), axis=-1)
+"""
 
 # fix random seed for reproducibility
 seed = 42
@@ -66,8 +52,7 @@ test_dates = pd.read_csv('test_form.csv', usecols=[0], skiprows=[0, 1])
 test_dates = test_dates.values.flatten().tolist()  # 제출해야할 날짜.
 # {'2015-07-18', '2015-06-27', '2014-12-21', '2014-09-25', '2016-03-04', '2015-04-04', '2014-07-06', '2014-05-18', '2014-10-23', '2016-10-20', '2015-12-13', '2015-01-13', '2017-03-15'}는 이 데이터 셋에선 test 못함.
 # 데이터 불러오기
-# X_df = pd.read_csv('independent_var_with_Gu_and_Wall.csv', index_col=[0])
-X_df = pd.read_csv('independent_var_only_GuANdWall.csv', index_col=[0])
+X_df = pd.read_csv('independent_var_with_Gu_and_Wall.csv', index_col=[0])
 
 X_df_index = set(X_df.index.values) - set(test_dates)  # 측정해야할 날짜는 뺀다.
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 날짜.
@@ -81,8 +66,7 @@ print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date),
 
 
 
-# 오버 샘플링 없이 모든 데이터 사용 : 그다지 예측력이 좋아진 느낌은 없다.
-'''
+# 오버 샘플링 없이 모든 데이터 사용.
 normal_date_X_df = X_df.loc[normal_date]
 abnormal_date_X_df = X_df.loc[abnormal_date]
 swell_date_X_df = X_df.loc[swell_date]
@@ -96,9 +80,8 @@ X_test = X_df.loc[test_dates_in_X_df]
 Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
+# 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날 1 비율로 오버 샘플링 :
 '''
-# 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
-
 abnormal_date_X_df = X_df.loc[abnormal_date]
 swell_date_X_df = X_df.loc[swell_date]
 
@@ -111,8 +94,8 @@ X_test = X_df.loc[test_dates_in_X_df]
 Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
-
-# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 :
 '''
 abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
 swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
@@ -143,21 +126,6 @@ Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
 '''
-# swell로만 학습 : 형편없다. 나중에 결과를 합치는데 써봐야할 것이다.
-'''
-swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
-
-X_train_df = pd.concat([swell_date_X_df])
-X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
-X_test = X_df.loc[test_dates_in_X_df]
-
-Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
-Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
-'''
-
 
 number_of_var = len(X_train_df.columns)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
@@ -198,11 +166,10 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     # 학습 자동 중단 설정
     early_stopping_callback = EarlyStopping(monitor='val_acc', patience=patience_num)
 
-    history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=2,
-                        callbacks=[early_stopping_callback])
+    history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=2, callbacks=[early_stopping_callback])
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(10, 10))
     # 테스트 셋의 오차
     y_vloss = history.history['val_loss']
     y_vacc = history.history['val_acc']
@@ -227,7 +194,6 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     prediction_for_test = np.where(model.predict(X_Validation) <= 0.5, 0, 1)
     print("predict : ", prediction_for_test)
     print("real : ", Y_Validation)
-
     accuracy.append(k_accuracy)
 
 print("\n %.f fold accuracy:" % n_fold, accuracy)
@@ -237,5 +203,3 @@ print("mean accuracy %.7f:" % np.mean(accuracy))
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %2f minute" % m)
-
-

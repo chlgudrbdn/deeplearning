@@ -17,10 +17,10 @@ filtered_swell_data = swell_for_preprocess[swell_for_preprocess['swell_happen'] 
 
 # WallPo_swell = pd.read_csv(os.getcwd() +'\deep_code\dataset\WallPo_swell.csv', index_col=[1])  # 독립변수 중 하나가 될것이다.
 # GuRyoungPo_swell = pd.read_csv(os.getcwd() +'\deep_code\dataset\GuRyoungPo_swell.csv', index_col=[1])  # 독립변수 중 하나가 될것이다.
-# PoHang_weather14to17 = pd.read_csv(os.getcwd() +'\deep_code\dataset\pohang_weather14to17_not_filterNA.csv', index_col=[1])  # 독립변수 중 하나가 될것이다.
+# PoHang_weather14to17 = pd.read_csv(os.getcwd() +'\deep_code\dataset\PoHang_weather14to17.csv', index_col=[1])  # 독립변수 중 하나가 될것이다.
 WallPo_swell = pd.read_csv('WallPo_swell.csv', index_col=[1])
 GuRyoungPo_swell = pd.read_csv('GuRyoungPo_swell.csv', index_col=[1])
-PoHang_weather14to17 = pd.read_csv('pohang_weather14to17_not_filterNA.csv', index_col=[1])
+PoHang_weather14to17 = pd.read_csv('PoHang_weather14to17.csv', index_col=[1])
 WallPo_swell = WallPo_swell.drop(columns=['지점'])
 GuRyoungPo_swell = GuRyoungPo_swell.drop(columns=['지점'])
 PoHang_weather14to17 = PoHang_weather14to17.drop(columns=['지점'])
@@ -65,7 +65,7 @@ for index, row in filtered_swell_data.iterrows():  # 훈련용, 테스트용 종
         swell_Y_DF.loc[index, time_grid[start_time + time]] = 1
 swell_Y_DF.to_csv('swell_Y.csv', encoding='utf-8')
 
-swell_Y = []  # 2진법이라 치고 숫자로 바꿀까 생각해봤는데 무리수가 될 가능성도 있으니 나중으로 미뤄본다.
+swell_Y = [] # 2진법이라 치고 숫자로 바꿀까 생각해봤는데 무리수가 될 가능성도 있으니 나중으로 미뤄본다.
 for index, row in swell_Y_DF.iterrows():
     binaries = "".join(str(i) for i in list(row.values))
     binaryToInt = int(binaries, 2)
@@ -75,7 +75,6 @@ swell_Y = pd.DataFrame(data=swell_Y, index=date2014to2017)
 swell_Y.to_csv('swell_Y_to_integer.csv', encoding='utf-8')
 # "{0:b}".format(정수) 치면 string으로 다시 재 해석되어 나온다.
 
-'''
 # abnormal_date = pd.DataFrame(data=zeroMatrix, index=date2014to2017)  # 이상기후 있는 시점(너울성파도 포함)을 코딩. 독립변수 중 하나가 될수 있을까?
 # abnormal_date.columns = time_grid
 # for index, row in swell_for_preprocess.iterrows():
@@ -89,14 +88,6 @@ swell_Y.to_csv('swell_Y_to_integer.csv', encoding='utf-8')
 # abnormal_date.to_csv('abnormal_date.csv', encoding='utf-8')
 # X_with_date_and_abnormal_weather = pd.merge(abnormal_date, data_about_time, left_index=True, right_index=True)
 # X_with_date_and_abnormal_weather.to_csv('X_with_date_and_abnormal_weather.csv', encoding='utf-8')
-'''
-
-# PoHang_weather14to17['기사'].values
-# Pohang_weather_24hour = pd.DataFrame(data=zeroMatrix, index=date2014to2017, columns=time_grid)
-# for index, row in PoHang_weather14to17['기사'].iterrows():
-#     start_time = list(row)[4].split(':')[0]
-
-
 
 only_swell_date_data = set(filtered_swell_data.index.values)  # swell이 있었던 날만 찾으면 196일. 20150925 이전은 79일. 이후는 117일.
 only_abnormal_date_data = set(swell_for_preprocess.index.values)  # 일단 이상기후(swell 포함) 있었던 날짜. # 571일이 나와야할텐데.
@@ -149,6 +140,7 @@ lack_of_info_after_20150925 = lack_of_WallPo_info_date_at_test.union(lack_of_GuR
 print("lack_of_WallPo_and_GuRyoungPo_swell_info_date_After_20150925 : %s" % lack_of_info_after_20150925)
 print(len(lack_of_info_after_20150925))
 
+
 # 테스트에 필요한 데이터가 이만큼 없다.
 PoHang_weather14to17 = PoHang_weather14to17.dropna()  # NA없애도 이미 처리해놔서 딱히 문제는 없다.
 # PoHang_weather14to17_ommit = set(date2014to2017)-set(PoHang_weather14to17.index.values)
@@ -159,30 +151,22 @@ independent_var_with_Gu = pd.concat([data_about_time, PoHang_weather14to17, GuRy
 independent_var_with_Wall = pd.concat([data_about_time, PoHang_weather14to17, WallPo_swell], axis=1, join='inner')  # shape는 (792, 43)
 independent_var_with_Gu_and_Wall = pd.concat([data_about_time, PoHang_weather14to17, GuRyoungPo_swell, WallPo_swell], axis=1, join='inner')  # shape는 (742, 52)
 
-independent_var_only_pohang = pd.concat([data_about_time, PoHang_weather14to17], axis=1, join='inner')
-independent_var_only_Gu = pd.concat([data_about_time, GuRyoungPo_swell], axis=1, join='inner')
-independent_var_only_Wall = pd.concat([data_about_time, WallPo_swell], axis=1, join='inner')
-independent_var_only_GuANdWall = pd.concat([data_about_time, GuRyoungPo_swell, WallPo_swell], axis=1, join='inner')
-
 notInTestdates = test_dates - set(independent_var_with.index.values)
 print(notInTestdates)  # 당연히 빈건 없다.
 print(len(notInTestdates))
 independent_var_with.to_csv('independent_var_with.csv', encoding='utf-8')  # 이걸 쓸 필요가 있을까?
-independent_var_only_pohang.to_csv('independent_var_only_pohang.csv', encoding='utf-8')  # 이걸 쓸 필요가 있을까?
 
 notInTestdates_Gu = test_dates - set(independent_var_with_Gu.index.values)
 print(notInTestdates_Gu)
 print(len(notInTestdates_Gu))
 # 적어도 제출 할때 {'2015-12-13', '2016-10-20'} 빼고 부족한 건 없다. 이 둘은 월포 까지만 포함된 데이터 셋으로 훈련된 모델로 예측이 가능할 것 이다.
 independent_var_with_Gu.to_csv('independent_var_with_Gu.csv', encoding='utf-8')
-independent_var_only_Gu.to_csv('independent_var_only_Gu.csv', encoding='utf-8')  # 이걸 쓸 필요가 있을까?
 
 notInTestdates_Wall = test_dates - set(independent_var_with_Wall.index.values)
 print(notInTestdates_Wall)
 print(len(notInTestdates_Wall))
 # {'2015-01-13', '2014-09-25', '2017-03-15', '2015-04-04', '2014-05-18', '2016-03-04', '2014-12-21', '2014-10-23', '2015-07-18', '2015-06-27', '2014-07-06'}가 부족. 이 11개 날짜는 구룡포까지만 포함된 데이터로 예측.
 independent_var_with_Wall.to_csv('independent_var_with_Wall.csv', encoding='utf-8')
-independent_var_only_Wall.to_csv('independent_var_only_Wall.csv', encoding='utf-8')  # 이걸 쓸 필요가 있을까?
 
 notInTestdates_Gu_and_Wall = test_dates - set(independent_var_with_Gu_and_Wall.index.values)
 print(notInTestdates_Gu_and_Wall)
@@ -190,7 +174,6 @@ print(len(notInTestdates_Gu_and_Wall))
 # {'2015-12-13', '2015-06-27', '2014-10-23', '2016-03-04', '2014-05-18', '2014-07-06', '2014-09-25', '2015-01-13', '2014-12-21', '2015-04-04', '2017-03-15', '2015-07-18', '2016-10-20'}가 부족. 위의 두 세트의 합집합이다.
 # 이 데이터세트론 25개중 13개나 예측을 못하게 될 것이다.
 independent_var_with_Gu_and_Wall.to_csv('independent_var_with_Gu_and_Wall.csv', encoding='utf-8')
-independent_var_only_GuANdWall.to_csv('independent_var_only_GuANdWall.csv', encoding='utf-8')  # 이걸 쓸 필요가 있을까?
 
 normal_date = set(date2014to2017) - set(only_abnormal_date_data) - test_dates  # only_abnormal_date_data는 swell 포함.
 normal_date = list(normal_date)
