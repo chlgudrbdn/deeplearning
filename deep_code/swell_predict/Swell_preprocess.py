@@ -50,6 +50,20 @@ time_grid = ["7:00", "8:00", "9:00", "10:00", "11:00", "12:00",
              "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"]  # 시작시간 기준으로 일단 잡아본다.
 swell_Y_DF.columns = time_grid
 
+anotehr_zeroMatrix = np.zeros(((365 * 4) + 1, 24)).astype('int')
+abnormal_date = pd.DataFrame(data=anotehr_zeroMatrix, index=date2014to2017)  # 이상기후 있는 시점(너울성파도 포함)을 코딩. 독립변수 중 하나가 될수 있을까?
+abnormal_date.columns = time_grid
+for index, row in swell_for_preprocess.iterrows():
+    # print(index)  # 이상기후이 생긴 날짜다. 근데 정작 test해야할 곳에선 이 정보가 있는지 없는지 애매하다.
+    start_time = int(list(row)[4].split(':')[0]) - 7  # 마이너스로 참조하면 맨 뒤부터 하게 됨. 01~02경우 1-7=-6이 됨.
+    # print('start_time_index %d' % start_time)
+    # print(time_grid[start_time])
+    for time in range(math.ceil(row['합'])):
+        # print('time %d' % time)
+        abnormal_date.loc[index, time_grid[start_time + time]] = 1
+abnormal_date.to_csv('abnormal_date.csv', encoding='utf-8')
+# X_with_date_and_abnormal_weather = pd.merge(abnormal_date, data_about_time, left_index=True, right_index=True)
+# X_with_date_and_abnormal_weather.to_csv('X_with_date_and_abnormal_weather.csv', encoding='utf-8')
 for index, row in filtered_swell_data.iterrows():  # 훈련용, 테스트용 종속변수가 될 것이다.
     # print(index)  # 너울이 생긴 날짜다.
     start_time = int(list(row)[4].split(':')[0]) - 7  # 마이너스로 참조하면 맨 뒤부터 하게 됨. 01~02경우 1-7=-6이 됨.
@@ -70,20 +84,6 @@ swell_Y = pd.DataFrame(data=swell_Y, index=date2014to2017)
 swell_Y.to_csv('swell_Y_to_integer.csv', encoding='utf-8')
 # "{0:b}".format(정수) 치면 string으로 다시 재 해석되어 나온다.
 
-abnormal_date = pd.DataFrame(data=zeroMatrix, index=date2014to2017)  # 이상기후 있는 시점(너울성파도 포함)을 코딩. 독립변수 중 하나가 될수 있을까?
-abnormal_date.columns = time_grid
-for index, row in swell_for_preprocess.iterrows():
-    # print(index)  # 이상기후이 생긴 날짜다. 근데 정작 test해야할 곳에선 이 정보가 있는지 없는지 애매하다.
-    start_time = int(list(row)[4].split(':')[0]) - 7  # 마이너스로 참조하면 맨 뒤부터 하게 됨. 01~02경우 1-7=-6이 됨.
-    # print('start_time_index %d' % start_time)
-    # print(time_grid[start_time])
-    for time in range(math.ceil(row['합'])):
-        # print('time %d' % time)
-        abnormal_date.loc[index, time_grid[start_time + time]] = 1
-abnormal_date.to_csv('abnormal_date.csv', encoding='utf-8')
-# X_with_date_and_abnormal_weather = pd.merge(abnormal_date, data_about_time, left_index=True, right_index=True)
-# X_with_date_and_abnormal_weather.to_csv('X_with_date_and_abnormal_weather.csv', encoding='utf-8')
-
 # PoHang_weather14to17['기사'].values
 # Pohang_weather_24hour = pd.DataFrame(data=zeroMatrix, index=date2014to2017, columns=time_grid)
 # for index, row in PoHang_weather14to17['기사'].iterrows():
@@ -91,8 +91,7 @@ abnormal_date.to_csv('abnormal_date.csv', encoding='utf-8')
 
 only_swell_date_data = set(filtered_swell_data.index.values)  # swell이 있었던 날만 찾으면 196일. 20150925 이전은 79일. 이후는 117일.
 only_abnormal_date_data = set(swell_for_preprocess.index.values)  # 일단 이상기후(swell 포함) 있었던 날짜. # 571일이 나와야할텐데.
-only_abnormal_date_data_without_swell = list(
-    only_abnormal_date_data - only_swell_date_data)  # swell이 아닌 이상 기후만 있었던 날짜. 375일 20150925 이전은 177. 이후는 198일.
+only_abnormal_date_data_without_swell = list(only_abnormal_date_data - only_swell_date_data)  # swell이 아닌 이상 기후만 있었던 날짜. 375일 20150925 이전은 177. 이후는 198일.
 only_abnormal_date_data_without_swell = pd.DataFrame(data=only_abnormal_date_data_without_swell,
                                                      columns=['only_abnormal_date_data_without_swell'])
 only_abnormal_date_data_without_swell.to_csv('only_abnormal_date_data_without_swell.csv', encoding='utf-8')
@@ -241,8 +240,11 @@ test_dates_times_df = pd.DataFrame(data=test_dates_times, columns=['test_date'])
 test_dates_times_df.to_csv('test_dates_times.csv', encoding='utf-8')
 
 flatten_abnormal = abnormal_date.values.flatten().tolist()
+# np.sum(flatten_abnormal)
 abnormal_time_DF_flatten = pd.DataFrame(data=flatten_abnormal, index=index_for_flatten_swell)
 only_abnormal_not_swell_time_DF_flatten = abnormal_time_DF_flatten - swell_Y_DF_flatten
+# np.sum(only_abnormal_not_swell_time_DF_flatten.values)
+# np.sum(swell_Y_DF_flatten.values)
 only_abnormal_not_swell_time_DF_flatten.to_csv('only_abnormal_not_swell_time_DF_flatten.csv', encoding='utf-8')
 
 GuRyoungPo_hour_14 = pd.read_csv('구룡포 시간별 파고부이 14년.csv', index_col=[1])
@@ -253,14 +255,12 @@ GuRyoungPo_hour_16 = pd.read_csv('구룡포 시간별 파고부이 16년.csv', i
 GuRyoungPo_hour_16 = GuRyoungPo_hour_16.drop(columns=['지점'])
 GuRyoungPo_hour_17 = pd.read_csv('구룡포 시간별 파고부이 17년.csv', index_col=[1])
 GuRyoungPo_hour_17 = GuRyoungPo_hour_17.drop(columns=['지점'])
-
 WallPo_hour_15 = pd.read_csv('월포 시간별 파고부이 15년.csv', index_col=[1])
 WallPo_hour_15 = WallPo_hour_15.drop(columns=['지점'])
 WallPo_hour_16 = pd.read_csv('월포 시간별 파고부이 16년.csv', index_col=[1])
 WallPo_hour_16 = WallPo_hour_16.drop(columns=['지점'])
 WallPo_hour_17 = pd.read_csv('월포 시간별 파고부이 17년.csv', index_col=[1])
 WallPo_hour_17 = WallPo_hour_17.drop(columns=['지점'])
-
 Pohang_hour_14 = pd.read_csv('포항 시간별 해양기상부이 14년.csv', index_col=[1])
 Pohang_hour_14 = Pohang_hour_14.drop(columns=['지점'])
 Pohang_hour_15 = pd.read_csv('포항 시간별 해양기상부이 15년.csv', index_col=[1])
@@ -277,8 +277,7 @@ Pohang_hour = pd.concat([Pohang_hour_14, Pohang_hour_15, Pohang_hour_16, Pohang_
 GuRyoungPo_hour = GuRyoungPo_hour.fillna(method='ffill', limit=1)
 # print(GuRyoungPo_hour.isnull().sum())
 GuRyoungPo_hour = GuRyoungPo_hour.dropna()
-GuRyoungPo_hour_ommited_time_in_test_dates = list(
-    set(test_dates_times) - set(GuRyoungPo_hour.index.values))  # 37개정도가 제출할 날짜에 부족. 전부 2015년 이후다.
+GuRyoungPo_hour_ommited_time_in_test_dates = list(set(test_dates_times) - set(GuRyoungPo_hour.index.values))  # 37개정도가 제출할 날짜에 부족. 전부 2015년 이후다.
 GuRyoungPo_hour_ommited_time_in_test_dates.sort()
 print("GuRyoungPo_hour_ommited_time_in_test_dates : ")  # 부족한건 월포의 정보로 로 때우던가 해야할 것이다.
 print(GuRyoungPo_hour_ommited_time_in_test_dates)
@@ -293,8 +292,7 @@ GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 이렇게하면 36줄 데�
 
 WallPo_hour = WallPo_hour.fillna(method='ffill', limit=1)
 WallPo_hour = WallPo_hour.dropna()
-WallPo_hour_ommited_time_in_test_dates = list(
-    set(test_dates_times) - set(WallPo_hour.index.values))  # 2014년 데이터가 없어 누락이 많다. 263개
+WallPo_hour_ommited_time_in_test_dates = list(set(test_dates_times) - set(WallPo_hour.index.values))  # 2014년 데이터가 없어 누락이 많다. 263개
 WallPo_hour_ommited_time_in_test_dates.sort()
 WallPo_hour_ommited_time_in_test_dates_after_20150925_1000 = list(filter(lambda x: x > '2015-09-25 10:00', WallPo_hour_ommited_time_in_test_dates))
 # print("WallPo_hour_ommited_time_in_test_dates : %s" % WallPo_hour_ommited_time_in_test_dates)
@@ -316,8 +314,7 @@ WallPo_hour_ommited_time_in_test_dates = list(set(test_dates_times) - set(WallPo
 WallPo_hour_ommited_time_in_test_dates_after_20150925_1000 = list(filter(lambda x: x > '2015-09-25 10:00', WallPo_hour_ommited_time_in_test_dates))
 # '2015-09-25 10:00'는 '2015-09-25 9:00'보다 작아서 문제가 될 수 있으나 사실 이 이전의 데이터는 존재하지 않아 큰 문제는 없다.
 
-GuWall_info_lack_time = set(WallPo_hour_ommited_time_in_test_dates_after_20150925_1000).intersection(
-    GuRyoungPo_hour_ommited_time_in_test_dates)
+GuWall_info_lack_time = set(WallPo_hour_ommited_time_in_test_dates_after_20150925_1000).intersection(GuRyoungPo_hour_ommited_time_in_test_dates)
 print("GuWall_info_lack_time : %s" % GuWall_info_lack_time)  # 원래는 꽤 비는 부분이 많았으나 결국 줄이고 줄여서 둘 다 없는 부분은 일단 제거됨.
 
 temp_df_list = pd.DataFrame(index=index_for_flatten_swell)

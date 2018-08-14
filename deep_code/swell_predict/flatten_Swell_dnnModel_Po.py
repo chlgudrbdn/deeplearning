@@ -38,7 +38,7 @@ def score_calculating(true_value, pred_value):
     Score = 0
     for i in range(len(true_value)):
         for j in range(len(true_value[i])):
-            print(true_value[i][j], " :: ", pred_value[i][j])
+            print(true_value[i][j], "::", pred_value[i][j], end=",")
             if true_value[i][j] == 0:
                 if true_value[i][j] == pred_value[i][j]:
                     Score = Score + 1

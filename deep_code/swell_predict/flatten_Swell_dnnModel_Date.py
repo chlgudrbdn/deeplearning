@@ -2,7 +2,7 @@
 
 from keras.datasets import mnist
 from keras.utils import np_utils
-from keras.models import Sequential, load_model
+from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten
 from keras.callbacks import ModelCheckpoint,EarlyStopping
 import keras.backend as K
@@ -18,22 +18,31 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import time
 start_time = time.time()
+def rmse(y_true, y_pred):
+	return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
 '''
 def swell_eval(y_true, y_pred):
-    Score = 0
-    if K.equal(y_true, K.variable(0)):
-        if y_true == y_pred:
-            Score = Score+1
+    def scoring(y_true, y_pred):
+        Score = 0
+        if K.equal(y_true, K.variable(0)):
+            if y_true == y_pred:
+                Score = Score+1
+            else:
+                Score = Score-1
         else:
-            Score = Score-1
-    else:
-        if y_true == y_pred:
-            Score = Score+2
-        else:
-            Score = Score-2
-    return K.variable(Score)
-'''
+            if y_true == y_pred:
+                Score = Score+2
+            else:
+                Score = Score-2
+        return Score
+   
+    # return K.variable(Score)
+    cutom_Score = 0
+    # cutom_Score = K.switch(K.equal(y_true, K.variable(0)), K.variable(1), K.variable(0))
+    # cutom_Score = K.switch(K.equal(y_true, K.round(y_pred)), 1, 0)
 
+    return cutom_Score
+    '''
 def score_calculating(true_value, pred_value):
     Score = 0
     for i in range(len(true_value)):
@@ -64,12 +73,12 @@ K.set_session(sess)
 tf.global_variables_initializer()
 
 test_dates_df = pd.read_csv('test_dates_times.csv', usecols=[1])
-test_dates = test_dates_df.values.flatten().tolist()
+test_dates = test_dates_df.values
+test_dates = list(test_dates)
 # 데이터 불러오기
-# X_df = pd.read_csv('ind_var_with_DateGuPo.csv', index_col=[0])
-X_df = pd.read_csv('ind_var_with_DateGuPo_withoutwind.csv', index_col=[0])
+X_df = pd.read_csv('data_about_time_flatten.csv', index_col=[0])
 
-X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 뺀다.
+X_df_index = set(X_df.index.values) - set(test_dates)  # 제출해야할 날짜는 뺀다.
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
 abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
 abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
@@ -116,7 +125,7 @@ Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
 '''
 # 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
-'''
+
 abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
 swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
 
@@ -130,9 +139,9 @@ X_test = X_df.loc[test_dates_in_X_df]
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
-'''
-# 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
 
+# 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
 normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
 abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
 swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
@@ -141,13 +150,12 @@ X_train_df = pd.concat([normal_date_X_df, abnormal_date_X_df, swell_date_X_df])
 X = X_train_df.values.astype('float32')
 X_scaler = MinMaxScaler(feature_range=(0, 1))
 X = X_scaler.fit_transform(X)
-
 X_test = X_df.loc[test_dates_in_X_df]
 
-Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values
-
+Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
+'''
 # swell로만 학습 : 형편없다. 나중에 결과를 합치는데 써봐야할 것이다.
 '''
 swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
@@ -167,7 +175,7 @@ Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
 number_of_var = len(X_train_df.columns)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 300
+epochs = 3
 patience_num = 200
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
@@ -189,13 +197,11 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     edge_num = 2
     while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
         model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-        model.add(Dropout(0.1))
+        # model.add(Dropout(0.2))
         edge_num += 1
     model.add(Dense(1, activation='sigmoid'))
     print("edge_num : %d" % edge_num)
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']) # 판단근거 https://www.dlology.com/blog/how-to-choose-last-layer-activation-and-loss-function/
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['binary_accuracy'])  # 판단근거 https://www.dlology.com/blog/how-to-choose-last-layer-activation-and-loss-function/
-
     # 모델 저장 폴더 만들기
     # MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
     # if not os.path.exists(MODEL_DIR):
@@ -207,10 +213,12 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     # early_stopping_callback = EarlyStopping(monitor='val_acc', patience=patience_num)
     early_stopping_callback = EarlyStopping(monitor='val_binary_accuracy', patience=patience_num)
 
-    history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=0, callbacks=[early_stopping_callback])
+    history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=2,
+                        callbacks=[early_stopping_callback])
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
     plt.figure(figsize=(8, 8))
+    # 테스트 셋의 오차
     # 테스트 셋의 오차
     y_acc = history.history['binary_accuracy']
     # y_acc = history.history['acc']
@@ -240,7 +248,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     # print("predict : %s" % prediction_for_test)
     # print("real    : %s" % Y_Validation)
     Scores.append(score_calculating(Y_Validation, prediction_for_test))
-    print("\nscore guess : %d" % score_calculating(Y_Validation, prediction_for_test))
+    print("score guess : %d" % score_calculating(Y_Validation, prediction_for_test))
     accuracy.append(k_accuracy)
 
 print("\n %.f fold accuracy:" % n_fold, accuracy)
@@ -253,39 +261,4 @@ print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %2f minute" % m)
 
-
-model = Sequential()
-model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
-edge_num = 2
-while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
-    model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), activation='relu'))
-    model.add(Dropout(0.1))
-    edge_num += 1
-model.add(Dense(1, activation='sigmoid'))
-# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['binary_accuracy'])
-
-MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
-if not os.path.exists(MODEL_DIR):
-    os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR+"{val_binary_accuracy:.9f}.hdf5"
-# 모델 업데이트 및 저장
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_binary_accuracy', verbose=2, save_best_only=True)
-early_stopping_callback = EarlyStopping(monitor='val_binary_accuracy', patience=patience_num)
-
-history = model.fit(X, Y, validation_split=0.2, epochs=epochs, verbose=0, callbacks=[checkpointer, early_stopping_callback])
-
-file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()  # 만든날짜 정렬
-model = load_model(MODEL_DIR + file_list[-1])
-
-prediction_for_test = np.where(model.predict(X_test.values) < 0.5, 0, 1)
-for timeAndDate, predic in zip(X_test.index.values, prediction_for_test):
-    print("%s" % timeAndDate, ": %d" % predic)
-# X_test["prediction"] = prediction_for_test
-prediction_for_test_DF_DateGuWall = pd.DataFrame(data=prediction_for_test, index=X_test.index.values)
-
-print(prediction_for_test_DF_DateGuWall)
-print(prediction_for_test_DF_DateGuWall.shape)
-prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWall.csv', encoding='utf-8')
 

@@ -20,6 +20,10 @@ import random as rn
 import time
 
 start_time = time.time()
+
+def rmse(y_true, y_pred):
+	return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
+
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
@@ -33,10 +37,14 @@ class CustomHistory(keras.callbacks.Callback):
     def init(self):
         self.train_loss = []
         self.val_loss = []
+        self.train_rmse = []
+        self.val_rmse = []
 
     def on_epoch_end(self, batch, logs={}):
         self.train_loss.append(logs.get('loss'))
         self.val_loss.append(logs.get('val_loss'))
+        self.train_rmse.append(logs.get('rmse'))
+        self.val_rmse.append(logs.get('val_rmse'))
 
 
 # fix random seed for reproducibility
@@ -65,7 +73,7 @@ dataset = scaler.fit_transform(dataset)
 number_of_var = len(dataframe.columns)
 look_back = 25 # 기억력은 1달 일 전후라고 치자. timesteps이다.
 forecast_ahead = 15
-num_epochs = 160
+num_epochs = 200
 # num_epochs = 1
 
 # hyperparameter tuning section
@@ -92,9 +100,9 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     MODEL_DIR = './' + filename + ' model_loopNum' + str(len(average_rmse_list)).zfill(2) + '/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+    modelpath = MODEL_DIR + "{val_rmse:.9f}.hdf5"
     # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
     # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
     train, val, test = dataset[0:i - look_back, ], dataset[i - look_back * 2: i, ], dataset[i:i + forecast_ahead, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
@@ -120,7 +128,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     model.add(Dropout(0.3))
     model.add(Dense(1))
 
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    model.compile(loss='mean_squared_error', optimizer='adam', metrics=[rmse])
 
     custom_hist = CustomHistory()
     custom_hist.init()
@@ -149,7 +157,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     for model_file in file_list:
         print(model_file)
         # model = load_model(MODEL_DIR + file_list[0])
-        model = load_model(MODEL_DIR + model_file)
+        model = load_model(MODEL_DIR + model_file, custom_objects={'rmse': rmse})
         # make predictions
         trainPredict = model.predict(trainX, batch_size=1)  # 다음번엔 최소공배수로 예측 되도록 앞쪽 데이터는 좀 잘라두자.
         valPredict = model.predict(valX, batch_size=1)
@@ -226,14 +234,23 @@ m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
 
 
+# plt.figure(figsize=(12, 5))
+# # plt.plot(cus/tom_hist.train_loss)
+# # plt.plot(custom_hist.val_loss)
+# plt.plot(trainScoreList)
+# plt.plot(valScoreList)
+# plt.plot(testScoreList)
+# # plt.ylim(0.0, 0.025)
+# plt.ylabel('loss')
+# plt.xlabel('epoch')
+# plt.legend(['trainScore', 'valScore', 'testScore'], loc='upper left')
+# plt.show()
 plt.figure(figsize=(12, 5))
-# plt.plot(cus/tom_hist.train_loss)
-# plt.plot(custom_hist.val_loss)
-plt.plot(trainScoreList)
-plt.plot(valScoreList)
-plt.plot(testScoreList)
-# plt.ylim(0.0, 0.025)
-plt.ylabel('loss')
+plt.plot(custom_hist.train_loss)
+plt.plot(custom_hist.val_loss)
+plt.plot(custom_hist.train_rmse)
+plt.plot(custom_hist.val_rmse)
+plt.ylabel('loss & rmse')
 plt.xlabel('epoch')
-plt.legend(['trainScore', 'valScore', 'testScore'], loc='upper left')
+plt.legend(['loss', 'val loss', 'rmse', 'val_rmse'], loc='upper left')
 plt.show()

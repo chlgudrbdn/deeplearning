@@ -18,10 +18,14 @@ import os, sys
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 import random as rn
 import time
+# import keras.losses
+
 
 start_time = time.time()
 
-
+def rmse(y_true, y_pred):
+	return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
+# keras.losses.custom_loss = rmse
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
@@ -35,10 +39,14 @@ class CustomHistory(keras.callbacks.Callback):
     def init(self):
         self.train_loss = []
         self.val_loss = []
+        self.train_rmse = []
+        self.val_rmse = []
 
     def on_epoch_end(self, batch, logs={}):
         self.train_loss.append(logs.get('loss'))
         self.val_loss.append(logs.get('val_loss'))
+        self.train_rmse.append(logs.get('rmse'))
+        self.val_rmse.append(logs.get('val_rmse'))
 
 
 # fix random seed for reproducibility
@@ -93,11 +101,11 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     MODEL_DIR = './'+filename+' model_loopNum'+str(len(average_rmse_list)).zfill(2)+'/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
+    modelpath = MODEL_DIR+"{val_rmse:.9f}.hdf5"
     # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=False)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
+    early_stopping_callback = EarlyStopping(monitor='val_rmse', patience=200)
     train, val, test = dataset[0:i-look_back, ], dataset[i-look_back*2: i, ], dataset[i:i+forecast_ahead, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
     print('train=%d, val=%d, test=%d' % (len(train), len(val), len(test)))
     trainX, trainY = create_dataset(train, look_back)
@@ -116,15 +124,15 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     model.add(LSTM(32, input_shape=(look_back, number_of_var)))
     # model.add(LSTM(4, input_shape=(None, number_of_var)))
     # model.add(LSTM(10, batch_input_shape=(look_back, timesteps, number_of_var), stateful=True))
-    model.add(Dropout(0.3))
+    model.add(Dropout(0.2))
     model.add(Dense(16))
-    model.add(Dropout(0.3))
+    model.add(Dropout(0.2))
     model.add(Dense(8))
-    model.add(Dropout(0.3))
+    model.add(Dropout(0.2))
     model.add(Dense(4))
     model.add(Dense(2))
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    model.compile(loss='mean_squared_error', optimizer='adam', metrics=[rmse])
 
     custom_hist = CustomHistory()
     custom_hist.init()
@@ -152,7 +160,7 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
     for model_file in file_list:
         print(model_file)
         # model = load_model(MODEL_DIR + file_list[0])
-        model = load_model(MODEL_DIR + model_file)
+        model = load_model(MODEL_DIR + model_file, custom_objects={'rmse': rmse})
 
         trainPredict = model.predict(trainX, batch_size=1)
         valPredict = model.predict(valX, batch_size=1)
@@ -182,28 +190,28 @@ for i in range(n_train, n_records, forecast_ahead):  # 첫 제출일은 적어�
 
     # epoch가 늘때 마다 train과 val 데이터의 loss가 어떤 양상으로 줄어드는지 확인.
     # plt.figure(figsize=(12, 5))
-    fig, ax1 = plt.subplots()
-    t = range(num_epochs)
-    ax1.set_xlabel('epochs')
-    ax1.set_ylabel('loss', color='tab:black')
-    ax1.plot(t, custom_hist.train_loss, color='tab:blue')
-    ax1.plot(t, custom_hist.val_loss, color='tab:orange')
-    ax1.tick_params(axis='y', labelcolor='tab:black')
-
-    ax2 = ax1.twinx()
-
-    ax2.set_ylabel('RMSE', color='tab:black')
-    # plt.plot(custom_hist.train_loss)
-    # plt.plot(custom_hist.val_loss)
-    ax2.plot(t, trainScoreList, color='tab:purple')
-    ax2.plot(t, valScoreList, color='tab:green')
-    ax2.plot(t, testScoreList, color='tab:red')
-    ax2.tick_params(axis='y', labelcolor='tab:black')
-    # # plt.ylim(0.0, 10.0)
-    fig.tight_layout()
-    # plt.xlabel('epoch')
-    plt.legend(['loss', 'val_loss', 'trainScore', 'valScore', 'testScore'], loc='upper left')
-    plt.show()
+    # fig, ax1 = plt.subplots()
+    # t = range(num_epochs)
+    # ax1.set_xlabel('epochs')
+    # ax1.set_ylabel('loss', color='tab:black')
+    # ax1.plot(t, custom_hist.train_loss, color='tab:blue')
+    # ax1.plot(t, custom_hist.val_loss, color='tab:orange')
+    # ax1.tick_params(axis='y', labelcolor='tab:black')
+    #
+    # ax2 = ax1.twinx()
+    #
+    # ax2.set_ylabel('RMSE', color='tab:black')
+    # # plt.plot(custom_hist.train_loss)
+    # # plt.plot(custom_hist.val_loss)
+    # ax2.plot(t, trainScoreList, color='tab:purple')
+    # ax2.plot(t, valScoreList, color='tab:green')
+    # ax2.plot(t, testScoreList, color='tab:red')
+    # ax2.tick_params(axis='y', labelcolor='tab:black')
+    # # # plt.ylim(0.0, 10.0)
+    # fig.tight_layout()
+    # # plt.xlabel('epoch')
+    # plt.legend(['loss', 'val_loss', 'trainScore', 'valScore', 'testScore'], loc='upper left')
+    # plt.show()
 
     print("testScoreList")
     print(testScoreList)
@@ -234,10 +242,11 @@ print("almost %d minute" % m)
 plt.figure(figsize=(12, 5))
 plt.plot(custom_hist.train_loss)
 plt.plot(custom_hist.val_loss)
-plt.ylim(0.0, 10.0)
-plt.ylabel('loss')
+plt.plot(custom_hist.train_rmse)
+plt.plot(custom_hist.val_rmse)
+plt.ylabel('loss & rmse')
 plt.xlabel('epoch')
-plt.legend(['loss', 'val loss'], loc='upper left')
+plt.legend(['loss', 'val loss', 'rmse', 'val_rmse'], loc='upper left')
 plt.show()
 
 # 만약 이 모델이 다른것 보다 rmse가 작아 우수할 경우 재사용. 위는 그냥 다 주석처리해도 상관없다.
