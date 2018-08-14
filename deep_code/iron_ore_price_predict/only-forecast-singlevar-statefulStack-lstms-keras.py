@@ -21,6 +21,8 @@ import time
 
 start_time = time.time()
 
+def rmse(y_true, y_pred):
+	return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
 
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
@@ -91,11 +93,11 @@ print("n_records %d" % n_records)
 MODEL_DIR = './'+filename+' model_loopNum 10/'
 if not os.path.exists(MODEL_DIR):
     os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+modelpath = MODEL_DIR+"{val_rmse:.9f}.hdf5"
+checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
 # 학습 자동 중단 설정
 # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
-train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back * 2: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
+train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back - forecast_ahead: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
 print('train=%d, val=%d' % (len(train), len(val)))
 trainX, trainY = create_dataset(train, look_back)
 valX, valY = create_dataset(val, look_back)
@@ -111,12 +113,12 @@ valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
 model = Sequential()
 for l in range(2):
     model.add(
-        LSTM(320, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
-    model.add(Dropout(0.5))
-model.add(LSTM(320, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
-model.add(Dropout(0.3))
+        LSTM(128, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True, return_sequences=True))
+    model.add(Dropout(0.1))
+model.add(LSTM(128, batch_input_shape=(number_of_var, look_back, number_of_var), stateful=True))
+model.add(Dropout(0.1))
 model.add(Dense(1))
-model.compile(loss='mean_squared_error', optimizer='adam')
+model.compile(loss='mean_squared_error', optimizer='adam', metrics=[rmse])
 
 custom_hist = CustomHistory()
 custom_hist.init()
@@ -139,7 +141,7 @@ valY = scaler.inverse_transform(valY)
 # test = scaler.inverse_transform(test)
 
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()  # 만든날짜 정렬
+file_list.sort()
 for model_file in file_list:
     print(model_file)
     model = load_model(MODEL_DIR + model_file)

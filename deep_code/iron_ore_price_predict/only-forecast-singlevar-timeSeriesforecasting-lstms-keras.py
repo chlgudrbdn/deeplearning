@@ -21,6 +21,8 @@ import time
 
 start_time = time.time()
 
+def rmse(y_true, y_pred):
+	return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
 
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
@@ -55,7 +57,7 @@ tf.global_variables_initializer()
 # load the dataset
 filename = os.getcwd() + '\date_And_ironorePrice.csv'
 # filename = os.getcwd() + '\dataset\date_And_ironorePrice.csv'
-dataframe = pandas.read_csv(filename, usecols=[0])  # 원본은 usecols=[4] 란 옵션 써서 '종가'만 뽑아옴.
+dataframe = pandas.read_csv(filename, usecols=[0])
 dataset = dataframe.values
 dataset = dataset.astype('float32')
 
@@ -75,7 +77,7 @@ filename = os.path.basename(os.path.realpath(sys.argv[0]))
 n_train = dataset.shape[0] - (forecast_ahead * 10)  # 총데이터 샘플 수는 2356예상. 35개씩 테스트해서 마지막 개수까지 잘 맞추는 경우를 계산하면 0~1971, 2041,... 2321 식으로 11번 훈련 및 테스팅하는 루프가 돌것(1년 커버하는게 중요).
 n_records = dataset.shape[0]  # -(forecast_ahead-1)  # -1은 range가 마지막 수는 포함하지 않기 때문.
 # average_rmse_list = []
-predictList = []
+# predictList = []
 forecast_per_week = []
 
 trainScoreList = []
@@ -93,11 +95,11 @@ print("n_records %d" % n_records)
 MODEL_DIR = './'+filename+' model_loopNum 10/'
 if not os.path.exists(MODEL_DIR):
     os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+modelpath = MODEL_DIR+"{val_rmse:.9f}.hdf5"
+checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
 # 학습 자동 중단 설정
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=200)
-train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back * 2: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
+early_stopping_callback = EarlyStopping(monitor='val_rmse', patience=300)
+train, val = dataset[0:n_records - look_back, ], dataset[n_records - look_back - forecast_ahead: n_records, ]  # 이 경우는 look_back을 사용하는 방식이므로 예측에 충분한 수준의 값을 가져가야한다.
 print('train=%d, val=%d' % (len(train), len(val)))
 trainX, trainY = create_dataset(train, look_back)
 valX, valY = create_dataset(val, look_back)
@@ -111,18 +113,14 @@ valX = numpy.reshape(valX, (valX.shape[0], look_back, number_of_var))
 
 # create and fit the LSTM network
 model = Sequential()
-model.add(LSTM(320, input_shape=(look_back, number_of_var)))
-model.add(Dropout(0.3))
-model.add(Dense(160))
-model.add(Dropout(0.3))
-model.add(Dense(80))
-model.add(Dropout(0.3))
-model.add(Dense(40))
-model.add(Dropout(0.3))
-model.add(Dense(20))
-model.add(Dropout(0.3))
+model.add(LSTM(144, input_shape=(look_back, number_of_var)))
+model.add(Dropout(0.1))
+model.add(Dense(36))
+model.add(Dropout(0.1))
+model.add(Dense(16))
+model.add(Dropout(0.1))
 model.add(Dense(1))
-model.compile(loss='mean_squared_error', optimizer='adam')
+model.compile(loss='mean_squared_error', optimizer='adam', metrics=[rmse])
 
 custom_hist = CustomHistory()
 custom_hist.init()
@@ -140,10 +138,10 @@ valY = scaler.inverse_transform(valY)
 # test = scaler.inverse_transform(test)
 
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()  # 만든날짜 정렬
+file_list.sort()
 for model_file in file_list:
     print(model_file)
-    model = load_model(MODEL_DIR + model_file)
+    model = load_model(MODEL_DIR + model_file, custom_objects={'rmse': rmse})
 
     trainPredict = model.predict(trainX, batch_size=1)
     valPredict = model.predict(valX, batch_size=1)
