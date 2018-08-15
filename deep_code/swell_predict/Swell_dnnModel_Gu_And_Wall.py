@@ -198,7 +198,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     # 학습 자동 중단 설정
     early_stopping_callback = EarlyStopping(monitor='val_acc', patience=patience_num)
 
-    history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=2,
+    history = model.fit(X_train, Y_train, validation_split=0.2, epochs=epochs, verbose=0,
                         callbacks=[early_stopping_callback])
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
@@ -212,8 +212,8 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     x_len = np.arange(len(y_loss))
     plt.plot(x_len, y_vacc, c="red", label='val_acc')
     plt.plot(x_len, y_acc, c="blue", label='acc')
-    plt.plot(x_len, y_vloss, c="green", label='loss')
-    plt.plot(x_len, y_loss, c="orange", label='val_loss')
+    plt.plot(x_len, y_loss, c="green", label='loss')
+    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
 
     # 그래프에 그리드를 주고 레이블을 표시
     plt.legend(loc='upper left')
