@@ -213,7 +213,7 @@ rotated_time_grid = rotate(time_grid, 7)
 flatten_swell = swell_Y_DF.values.flatten().tolist()
 index_for_flatten_swell = []
 at_first = 0
-for day in date2014to2017:
+for day in date2014to2017:  # 총 24*365+24 = 35064 줄
     if at_first == 0:
         for time in time_grid:
             index_for_flatten_swell.append(day + " " + time)
@@ -288,6 +288,34 @@ print(len(GuRyoungPo_hour_ommited_time_in_test_dates))
 temp_df = GuRyoungPo_hour.loc['2015-06-27 4:00']
 temp_df.name = '2015-06-27 5:00'
 GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 이렇게하면 36줄 데이터가 부족하고 2015-12-13 24줄과 2016-10-20의 12시 이후 데이터만 부족. 2일치만 예측이 불가능.
+notOclockAtGuRyoungPo_hour = ['2014-05-02 9:17', '2014-05-02 9:45', '2014-05-21 16:01', '2014-05-21 16:58', '2014-05-21 17:36',
+                              '2014-12-23 16:16', '2015-06-15 7:08', '2015-06-24 7:45', '2015-10-23 2:05', '2015-10-23 9:35', '2015-12-01 10:25']
+
+#  정각이 아닌 시간대 자료. 11건. 수작업으로 처리.
+as_list = GuRyoungPo_hour.index.tolist()
+# for dateAndTime in as_list:
+
+temp_df = GuRyoungPo_hour.loc['2014-05-02 9:00']
+temp_df.name = '2014-05-02 10:00'
+GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 근처 2개 지우고 10시 것을 이전 값으로 추가.
+temp_df = GuRyoungPo_hour.loc['2014-05-21 16:01']
+temp_df.name = '2014-05-21 16:00'
+GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 비슷한 시간대의 자료로 변환
+temp_df = GuRyoungPo_hour.loc['2014-05-21 16:58']
+temp_df.name = '2014-05-21 17:00'
+GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 비슷한 시간대의 자료로 변환. 남는 '2014-05-21 17:36'는 그냥 삭제
+temp_df = GuRyoungPo_hour.loc['2014-12-23 15:00']
+temp_df.name = '2014-12-23 16:00'
+GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 불완전한 데이터 지우고 이전것으로 대체
+temp_df = GuRyoungPo_hour.loc['2015-06-15 5:00']
+temp_df.name = '2015-06-15 6:00'
+GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 불완전한 데이터 지우고 이전것으로 대체
+temp_df = GuRyoungPo_hour.loc['2015-06-15 5:00']
+temp_df.name = '2015-06-15 7:00'
+GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 불완전한 데이터 지우고 이전것으로 대체
+GuRyoungPo_hour = GuRyoungPo_hour.drop(['2014-05-02 9:17', '2014-05-02 9:45', '2014-05-21 16:01', '2014-05-21 16:58',
+                                        '2014-05-21 17:36', '2014-12-23 16:16', '2015-06-15 7:08', '2015-06-24 7:45',
+                                        '2015-06-24 9:00', '2015-10-23 2:05', '2015-10-23 9:35', '2015-12-01 10:25'])
 # GuRyoungPo_hour.sort_index(inplace=True)
 
 WallPo_hour = WallPo_hour.fillna(method='ffill', limit=1)

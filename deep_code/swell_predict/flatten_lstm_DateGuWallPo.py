@@ -3,7 +3,7 @@
 from keras.datasets import mnist
 from keras.utils import np_utils
 from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout, Flatten, Activation
+from keras.layers import Dense, Dropout, Flatten, Activation, LSTM
 from keras.callbacks import ModelCheckpoint,EarlyStopping
 import keras.backend as K
 import matplotlib.pyplot as plt
@@ -24,6 +24,32 @@ start_time = time.time()
 def weight_variable(shape, name=None):
     return np.sqrt(0.01 / shape[0]) * np.random.normal(size=shape)
 
+
+# convert series to supervised learning
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+    n_vars = 1 if type(data) is list else data.shape[1]
+    df = pd.DataFrame(data)
+    cols, names = list(), list()
+    # input sequence (t-n, ... t-1)
+    for i in range(n_in, 0, -1):
+        cols.append(df.shift(i))
+        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, n_out):
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+    # put it all together
+    agg = pd.concat(cols, axis=1)
+    agg.columns = names
+    # drop rows with NaN values
+    if dropnan:
+        agg.dropna(inplace=True)
+    return agg
+
+
 def score_calculating(true_value, pred_value):
     Score = 0
     for i in range(len(true_value)):
@@ -40,6 +66,7 @@ def score_calculating(true_value, pred_value):
                 else:
                     Score = Score - 2
     return Score
+
 
 # fix random seed for reproducibility
 seed = 42
@@ -153,20 +180,73 @@ Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
 '''
 
-
-number_of_var = len(X_train_df.columns)
-first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
+n_hours = 3
+# number_of_var = len(X_train_df.columns)
+n_features = len(X_train_df.columns)
+first_layer_node_cnt = int(n_features*(n_features-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
 epochs = 300
 patience_num = 200
-n_fold = 10
-kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
+# n_fold = 10
+# kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
 # 빈 accuracy 배열
 accuracy = []
 Scores = []
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
+# specify the number of lag hours
+# frame as supervised learning
+reframed = series_to_supervised(X, n_hours, 1)
+print(reframed.shape)
+
+# split into train and test sets
+values = reframed.values
+n_train_hours = 365 * 24
+train = values[:n_train_hours, :]
+test = values[n_train_hours:, :]
+# split into input and outputs
+n_obs = n_hours * n_features
+train_X, train_y = train[:, :n_obs], train[:, -n_features]
+test_X, test_y = test[:, :n_obs], test[:, -n_features]
+print(train_X.shape, len(train_X), train_y.shape)
+# reshape input to be 3D [samples, timesteps, features]
+train_X = train_X.reshape((train_X.shape[0], n_hours, n_features))
+test_X = test_X.reshape((test_X.shape[0], n_hours, n_features))
+print(train_X.shape, train_y.shape, test_X.shape, test_y.shape)
+
+# design network
+model = Sequential()
+model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
+model.add(Dense(1))
+model.compile(loss='mae', optimizer='adam')
+# fit network
+history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2,
+                    shuffle=False)
+# plot history
+plt.plot(history.history['loss'], label='train')
+plt.plot(history.history['val_loss'], label='test')
+plt.legend()
+plt.show()
+
+# make a prediction
+yhat = model.predict(test_X)
+test_X = test_X.reshape((test_X.shape[0], n_hours * n_features))
+# invert scaling for forecast
+inv_yhat = pd.concatenate((yhat, test_X[:, -7:]), axis=1)
+inv_yhat = X_scaler.inverse_transform(inv_yhat)
+inv_yhat = inv_yhat[:, 0]
+# invert scaling for actual
+test_y = test_y.reshape((len(test_y), 1))
+inv_y = concatenate((test_y, test_X[:, -7:]), axis=1)
+inv_y = scaler.inverse_transform(inv_y)
+inv_y = inv_y[:, 0]
+# calculate RMSE
+rmse = sqrt(mean_squared_error(inv_y, inv_yhat))
+print('Test RMSE: %.3f' % rmse)
+
+
+'''
 # 모델의 설정, 컴파일, 실행
 for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
     print("loop num : ", len(accuracy)+1)
@@ -316,5 +396,5 @@ prediction_for_test_DF_DateGuWall = pd.DataFrame(data=prediction_for_test, index
 # print(prediction_for_test_DF_DateGuWall)
 print(prediction_for_test_DF_DateGuWall.sum())
 print(prediction_for_test_DF_DateGuWall.shape)
-prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWallPo.csv', encoding='utf-8')
-
+prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWall.csv', encoding='utf-8')
+'''

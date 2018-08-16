@@ -1,5 +1,5 @@
 #-*- coding: utf-8 -*-
-
+'''
 from keras.datasets import mnist
 from keras.utils import np_utils
 from keras.models import Sequential, load_model
@@ -7,10 +7,19 @@ from keras.layers import Dense, Dropout, Flatten, Activation
 from keras.callbacks import ModelCheckpoint,EarlyStopping
 import keras.backend as K
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import KFold
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import Adam
+'''
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+from xgboost import plot_importance
+from sklearn.feature_selection import SelectFromModel
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import cross_val_score
 
 import os, sys
 import tensorflow as tf
@@ -21,25 +30,23 @@ from sklearn.model_selection import train_test_split
 import time
 start_time = time.time()
 
-def weight_variable(shape, name=None):
-    return np.sqrt(0.01 / shape[0]) * np.random.normal(size=shape)
 
 def score_calculating(true_value, pred_value):
     Score = 0
     for i in range(len(true_value)):
-        for j in range(len(true_value[i])):
-            if true_value[i][j] == 0:
-                if true_value[i][j] == pred_value[i][j]:
-                    Score = Score + 1
-                else:
-                    Score = Score - 1
+        if true_value[i] == 0:
+            if true_value[i] == pred_value[i]:
+                Score = Score + 1
             else:
-                # print(true_value[i][j], ":", pred_value[i][j], end=",")
-                if true_value[i][j] == pred_value[i][j]:
-                    Score = Score + 2
-                else:
-                    Score = Score - 2
+                Score = Score - 1
+        else:
+            # print(true_value[i][j], ":", pred_value[i][j], end=",")
+            if true_value[i] == pred_value[i]:
+                Score = Score + 2
+            else:
+                Score = Score - 2
     return Score
+
 
 # fix random seed for reproducibility
 seed = 42
@@ -47,17 +54,17 @@ os.environ['PYTHONHASHSEED'] = '0'
 np.random.seed(seed)
 rn.seed(seed)
 session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
-tf.set_random_seed(seed)
-sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
-K.set_session(sess)
+# tf.set_random_seed(seed)
+# sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+# K.set_session(sess)
 # manual_variable_initialization(True)
-tf.global_variables_initializer()
+# tf.global_variables_initializer()
 
 test_dates_df = pd.read_csv('test_dates_times.csv', usecols=[1])
 test_dates = test_dates_df.values.flatten().tolist()
 # 데이터 불러오기
-# X_df = pd.read_csv('ind_var_with_DateGuWallPo.csv', index_col=[0])
-X_df = pd.read_csv('ind_var_with_DateGuWallPo_withoutwind.csv', index_col=[0])
+X_df = pd.read_csv('ind_var_with_DateGuWallPo.csv', index_col=[0])
+# X_df = pd.read_csv('ind_var_with_DateGuWallPo_withoutwind.csv', index_col=[0])
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 뺀다.
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
@@ -90,37 +97,37 @@ Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
 '''
 # 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
-
+'''
 abnormal_date_X_df = X_df.loc[abnormal_date]
 swell_date_X_df = X_df.loc[swell_date]
 
 X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
 X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
 
-X_test = X_df.loc[test_dates_in_X_df]
+# X_test = X_df.loc[test_dates_in_X_df]
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
-
-# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
 '''
+# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+
 abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
 swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
 
 X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
 X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
 
 X_test = X_df.loc[test_dates_in_X_df]
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
-'''
+
 # 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
 '''
 normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
@@ -129,8 +136,8 @@ swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
 
 X_train_df = pd.concat([normal_date_X_df, abnormal_date_X_df, swell_date_X_df])
 X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
 
 X_test = X_df.loc[test_dates_in_X_df]
 
@@ -153,7 +160,65 @@ Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
 '''
 
+test_size = 0.33
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=seed)
+y_test = y_test.flatten().tolist()
+y_train = y_train.flatten().tolist()
+# fit model no training data
+model = XGBClassifier()
+model.fit(X_train, y_train)
+# make predictions for test data
+y_pred = model.predict(X_test)
+predictions = [round(value) for value in y_pred]
+print(y_pred.sum())
+# print(np.asarray(predictions).sum())
+# evaluate predictions
+accuracy = accuracy_score(y_test, predictions)
+print("scoring : %d" % score_calculating(y_test, predictions))
+print("Accuracy: %.2f%%" % (accuracy * 100.0))
+# print(model.feature_importances_)
+# plt.bar(range(len(model.feature_importances_)), model.feature_importances_)
+# plot_importance(model)
+# plt.show()
+thresholds = np.sort(model.feature_importances_)
+for thresh in thresholds:
+    # select features using threshold
+    selection = SelectFromModel(model, threshold=thresh, prefit=True)
+    select_X_train = selection.transform(X_train)
+    # train model
+    selection_model = XGBClassifier()
+    selection_model.fit(select_X_train, y_train)
+    # eval model
+    select_X_test = selection.transform(X_test)
+    y_pred = selection_model.predict(select_X_test)
+    predictions = [round(value) for value in y_pred]
+    accuracy = accuracy_score(y_test, predictions)
+    Score = score_calculating(y_test, predictions)
+    print("Thresh=%.3f, n=%d, Accuracy: %.2f%% , Score: %d, OneCount : %d"
+          % (thresh, select_X_train.shape[1], accuracy*100.0, Score, np.asarray(predictions).sum()))
 
+'''
+kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=seed)
+# Single Thread XGBoost, Parallel Thread CV
+start = time.time()
+model = XGBClassifier(nthread=1)
+results = cross_val_score(model, X, Y, cv=kfold, scoring='neg_log_loss', n_jobs=-1)
+elapsed = time.time() - start
+print("Single Thread XGBoost, Parallel Thread CV: %f" % (elapsed))
+# Parallel Thread XGBoost, Single Thread CV
+start = time.time()
+model = XGBClassifier(nthread=-1)
+results = cross_val_score(model, X, Y, cv=kfold, scoring='neg_log_loss', n_jobs=1)
+elapsed = time.time() - start
+print("Parallel Thread XGBoost, Single Thread CV: %f" % (elapsed))
+# Parallel Thread XGBoost and CV
+start = time.time()
+model = XGBClassifier(nthread=-1)
+results = cross_val_score(model, X, Y, cv=kfold, scoring='neg_log_loss', n_jobs=-1)
+elapsed = time.time() - start
+print("Parallel Thread XGBoost and CV: %f" % (elapsed))
+'''
+'''
 number_of_var = len(X_train_df.columns)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
@@ -182,7 +247,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
         model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), kernel_initializer='random_normal'))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
-        # model.add(Dropout(0.1))
+        model.add(Dropout(0.1))
         edge_num += 1
     model.add(Dense(1, activation='sigmoid'))
     print("edge_num : %d" % edge_num)
@@ -262,7 +327,7 @@ while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
     model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), kernel_initializer='random_normal'))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
-    # model.add(Dropout(0.1))
+    model.add(Dropout(0.1))
     edge_num += 1
 model.add(Dense(1, activation='sigmoid'))
 model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=['accuracy'])
@@ -276,32 +341,8 @@ modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
 checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
 early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
 
-history = model.fit(X, Y, validation_split=0.1, epochs=epochs, verbose=0, batch_size=len(X),
+history = model.fit(X, Y, validation_split=0.2, epochs=epochs, verbose=0, batch_size=len(X),
                     callbacks=[checkpointer, early_stopping_callback])
-
-plt.figure(figsize=(8, 8))
-# 테스트 셋의 오차
-# y_acc = history.history['binary_accuracy']
-y_acc = history.history['acc']
-# y_vacc = history.history['val_binary_accuracy']
-y_vacc = history.history['val_acc']
-y_loss = history.history['loss']
-y_vloss = history.history['val_loss']
-# 그래프로 표현
-x_len = np.arange(len(y_loss))
-# plt.plot(x_len, y_acc, c="blue", label='binary_accuracy')
-plt.plot(x_len, y_acc, c="blue", label='acc')
-# plt.plot(x_len, y_vacc, c="red", label='val_binary_accuracy')
-plt.plot(x_len, y_vacc, c="red", label='val_acc')
-plt.plot(x_len, y_loss, c="green", label='loss')
-plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-# 그래프에 그리드를 주고 레이블을 표시
-plt.legend(loc='upper left')
-plt.grid()
-plt.xlabel('epoch')
-plt.ylabel('acc')
-plt.show()
 
 file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
 file_list.sort()  # 만든날짜 정렬
@@ -316,5 +357,6 @@ prediction_for_test_DF_DateGuWall = pd.DataFrame(data=prediction_for_test, index
 # print(prediction_for_test_DF_DateGuWall)
 print(prediction_for_test_DF_DateGuWall.sum())
 print(prediction_for_test_DF_DateGuWall.shape)
-prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWallPo.csv', encoding='utf-8')
+prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWall.csv', encoding='utf-8')
 
+'''
