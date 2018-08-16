@@ -223,19 +223,33 @@ for day in date2014to2017:  # 총 24*365+24 = 35064 줄
     elif at_first == 1:
         for time in rotated_time_grid:
             index_for_flatten_swell.append(day + " " + time)
-
-        if date2014to2017[-1] == day and time == '23:00':
-            for idx in range(7):
-                index_for_flatten_swell.append("2018-01-01 " + rotated_time_grid[idx])
+            if date2014to2017[-1] == day and time == '23:00':
+                for idx in range(7):
+                    index_for_flatten_swell.append("2018-01-01 " + rotated_time_grid[idx])
                 # print(index_for_flatten_swell[-1])
 swell_Y_DF_flatten = pd.DataFrame(data=flatten_swell, index=index_for_flatten_swell)
 swell_Y_DF_flatten.to_csv('swell_Y_DF_flatten.csv', encoding='utf-8')
 # 함부로 정렬하면 9:00이 11:00 보다 커지게 된다. s = mydatetime.strftime('%Y-%m-%d %I:%M%p').lstrip("0").replace(" 0", " ")
 # https://stackoverflow.com/questions/9525944/python-datetime-formatting-without-zero-padding  참고
 test_dates_times = []
+at_first = 0
+test_dates = list(test_dates)
+test_dates.sort()
 for test_day in test_dates:
-    for test_time in time_grid:
-        test_dates_times.append(test_day + " " + test_time)
+    if at_first == 0:
+        for time in time_grid:
+            test_dates_times.append(test_day + " " + time)
+            if time == '23:00':
+                at_first = 1
+                break
+    elif at_first == 1:
+        for time in rotated_time_grid:
+            test_dates_times.append(test_day + " " + time)
+            if test_dates[-1] == test_day and time == '23:00':
+                for idx in range(7):
+                    test_dates_times.append(test_day + " " + rotated_time_grid[idx])
+    # for test_time in time_grid:
+    #     test_dates_times.append(test_day + " " + test_time)
 test_dates_times_df = pd.DataFrame(data=test_dates_times, columns=['test_date'])
 test_dates_times_df.to_csv('test_dates_times.csv', encoding='utf-8')
 

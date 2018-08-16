@@ -20,6 +20,7 @@ from xgboost import plot_importance
 from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import cross_val_score
+from datetime import datetime as dt
 
 import os, sys
 import tensorflow as tf
@@ -48,32 +49,46 @@ def score_calculating(true_value, pred_value):
     return Score
 
 
+def time_index_change_format(df):
+    as_list = df.index.tolist()
+    for dateAndTime in as_list:
+        position = as_list.index(dateAndTime)
+        as_list[position] = dt.strptime(dateAndTime, '%Y-%m-%d %H:%M').strftime('%Y-%m-%d %H:%M')
+    df.index = as_list
+    return df
+
+
 # fix random seed for reproducibility
 seed = 42
 os.environ['PYTHONHASHSEED'] = '0'
 np.random.seed(seed)
 rn.seed(seed)
 session_conf = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1)
-# tf.set_random_seed(seed)
-# sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
-# K.set_session(sess)
-# manual_variable_initialization(True)
-# tf.global_variables_initializer()
 
-test_dates_df = pd.read_csv('test_dates_times.csv', usecols=[1])
-test_dates = test_dates_df.values.flatten().tolist()
+test_dates_df = pd.read_csv('test_dates_times.csv', index_col=[1], skiprows=0)
+test_dates_df = time_index_change_format(test_dates_df)
+# test_dates_df.rename( columns={'Unnamed: 0':'new column name'}, inplace=True )
+# test_dates_df.sort_index(inplace=True)
+test_dates = test_dates_df.index.values.flatten().tolist()
 # 데이터 불러오기
-X_df = pd.read_csv('ind_var_with_DateGuWallPo.csv', index_col=[0])
-# X_df = pd.read_csv('ind_var_with_DateGuWallPo_withoutwind.csv', index_col=[0])
+X_df = pd.read_csv('ind_var_with_DateGu.csv', index_col=[0])
+X_df = time_index_change_format(X_df)
+X_df.sort_index(inplace=True)
 
-X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 뺀다.
+X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
 abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
+abnormal_date = time_index_change_format(abnormal_date)
+abnormal_date.sort_index(inplace=True)
 abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
 abnormal_date = set(abnormal_date).intersection(X_df_index)
+
 swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+swell_date = time_index_change_format(swell_date)
+swell_date.sort_index(inplace=True)
 swell_date = swell_date[swell_date['0'] == 1].index.values
 swell_date = set(swell_date).intersection(X_df_index)
+
 # normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
 normal_date = (X_df_index-swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
 print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
@@ -87,17 +102,18 @@ print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date),
 X_train_df = X_df.loc[X_df_index]
 
 X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
 
-X_test = X_df.loc[test_dates_in_X_df]
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
 '''
 # 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
-'''
+
 abnormal_date_X_df = X_df.loc[abnormal_date]
 swell_date_X_df = X_df.loc[swell_date]
 
@@ -106,14 +122,20 @@ X = X_train_df.values.astype('float32')
 # X_scaler = MinMaxScaler(feature_range=(0, 1))
 # X = X_scaler.fit_transform(X)
 
-# X_test = X_df.loc[test_dates_in_X_df]
+X_forecast_df = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast_df.values.astype('float32')
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values
-'''
-# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+Y_df = time_index_change_format(Y_df)
+onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)
+onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)
+Y_df.sort_index(inplace=True)
+Y_df = Y_df.loc[set(X_train_df.index.values)]
+# Y_df = Y_df.reindex(set(X_df.index.values))
+Y = Y_df.values
 
+# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
 abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
 swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
 
@@ -122,12 +144,13 @@ X = X_train_df.values.astype('float32')
 # X_scaler = MinMaxScaler(feature_range=(0, 1))
 # X = X_scaler.fit_transform(X)
 
-X_test = X_df.loc[test_dates_in_X_df]
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
 Y = Y_train_df.values
-
+'''
 # 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
 '''
 normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
@@ -139,7 +162,8 @@ X = X_train_df.values.astype('float32')
 # X_scaler = MinMaxScaler(feature_range=(0, 1))
 # X = X_scaler.fit_transform(X)
 
-X_test = X_df.loc[test_dates_in_X_df]
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 Y_train_df = Y_df.loc[set(X_train_df.index.values)]
@@ -161,7 +185,7 @@ Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
 '''
 
 test_size = 0.33
-X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=seed)
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=None)
 y_test = y_test.flatten().tolist()
 y_train = y_train.flatten().tolist()
 # fit model no training data
@@ -177,16 +201,29 @@ accuracy = accuracy_score(y_test, predictions)
 print("scoring : %d" % score_calculating(y_test, predictions))
 print("Accuracy: %.2f%%" % (accuracy * 100.0))
 # print(model.feature_importances_)
+varList = []
+for num in range(len(model.feature_importances_)):
+    # varName = 'f' + str(num)
+    # varList.append(varName)
+    varList.append(num)
+var_feature_imp = pd.DataFrame(data=varList, index=list(model.feature_importances_))
+var_feature_imp.sort_index(inplace=True, ascending=False)
+var_sortby_featureImp = list(var_feature_imp.values.flatten().tolist())
 # plt.bar(range(len(model.feature_importances_)), model.feature_importances_)
 # plot_importance(model)
 # plt.show()
+scoreList = []
 thresholds = np.sort(model.feature_importances_)
+forecastList = []
+accuracyList = []
 for thresh in thresholds:
     # select features using threshold
     selection = SelectFromModel(model, threshold=thresh, prefit=True)
     select_X_train = selection.transform(X_train)
     # train model
-    selection_model = XGBClassifier()
+    selection_model = XGBClassifier(learning_rate=0.1, n_estimators=1000,
+                                    max_depth=6, min_child_weight=1, gamma=0.4, subsample=0.8, colsample_bytree=0.8,
+                                    objective='binary:logistic', nthread=4, scale_pos_weight=1, seed=42)
     selection_model.fit(select_X_train, y_train)
     # eval model
     select_X_test = selection.transform(X_test)
@@ -194,169 +231,628 @@ for thresh in thresholds:
     predictions = [round(value) for value in y_pred]
     accuracy = accuracy_score(y_test, predictions)
     Score = score_calculating(y_test, predictions)
+    scoreList.append(Score)
     print("Thresh=%.3f, n=%d, Accuracy: %.2f%% , Score: %d, OneCount : %d"
           % (thresh, select_X_train.shape[1], accuracy*100.0, Score, np.asarray(predictions).sum()))
+    accuracyList.append(accuracy*100.0)
+    # y_fore = selection_model.predict( X_forecast_df.iloc[list(var_sortby_featureImp[:select_X_train.shape[1]])].values )
+    y_fore = selection_model.predict(selection.transform(X_forecast))
+    forecast = [round(value) for value in y_fore]
+    forecastList.append(forecast)
+    print("Onecount : %d " % np.asanyarray(forecast).sum())
 
+print("mean score : %.4f " % np.mean(scoreList))
+
+idx = scoreList.index(np.max(scoreList))
+print("take %d th thresh hold is fine" % idx)
+print("this is best acc prediction : %s" % forecastList[idx])
+result = pd.DataFrame(data=forecastList[idx], index=X_forecast_df.index)
+result = time_index_change_format(result)
+result.sort_index(inplace=True)
+# test_dates_df = test_dates_df.drop(columns=['Unnamed: 0'])
+
+# Forecast_df = pd.DataFrame(index=test_dates_df.index.values)
+Forecast_df = test_dates_df
+for index, row in Forecast_df.iterrows():
+    if index in result.index:
+        Forecast_df.loc[index, 'Unnamed: 0'] = int(result.loc[index].values)
+# Forecast_df = pd.concat([test_dates_df, result], axis=1, join='inner')
+# df.filter(regex='a',axis=0)
+# https://stackoverflow.com/questions/22897195/selecting-rows-with-similar-index-names-in-pandas
+
+
+
+
+
+
+X_df = pd.read_csv('ind_var_with_DateWall.csv', index_col=[0])
+X_df = time_index_change_format(X_df)
+X_df.sort_index(inplace=True)
+
+X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
+test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
+abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
+abnormal_date = time_index_change_format(abnormal_date)
+abnormal_date.sort_index(inplace=True)
+abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
+abnormal_date = set(abnormal_date).intersection(X_df_index)
+
+swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+swell_date = time_index_change_format(swell_date)
+swell_date.sort_index(inplace=True)
+swell_date = swell_date[swell_date['0'] == 1].index.values
+swell_date = set(swell_date).intersection(X_df_index)
+
+# normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
+normal_date = (X_df_index-swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
+print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
+
+
+# 오버 샘플링 없이 모든 데이터 사용 : 그다지 예측력이 좋아진 느낌은 없다.
 '''
-kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=seed)
-# Single Thread XGBoost, Parallel Thread CV
-start = time.time()
-model = XGBClassifier(nthread=1)
-results = cross_val_score(model, X, Y, cv=kfold, scoring='neg_log_loss', n_jobs=-1)
-elapsed = time.time() - start
-print("Single Thread XGBoost, Parallel Thread CV: %f" % (elapsed))
-# Parallel Thread XGBoost, Single Thread CV
-start = time.time()
-model = XGBClassifier(nthread=-1)
-results = cross_val_score(model, X, Y, cv=kfold, scoring='neg_log_loss', n_jobs=1)
-elapsed = time.time() - start
-print("Parallel Thread XGBoost, Single Thread CV: %f" % (elapsed))
-# Parallel Thread XGBoost and CV
-start = time.time()
-model = XGBClassifier(nthread=-1)
-results = cross_val_score(model, X, Y, cv=kfold, scoring='neg_log_loss', n_jobs=-1)
-elapsed = time.time() - start
-print("Parallel Thread XGBoost and CV: %f" % (elapsed))
+# normal_date_X_df = X_df.loc[normal_date]
+# abnormal_date_X_df = X_df.loc[abnormal_date]
+# swell_date_X_df = X_df.loc[swell_date]
+X_train_df = X_df.loc[X_df_index]
+
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
 '''
+# 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
+
+abnormal_date_X_df = X_df.loc[abnormal_date]
+swell_date_X_df = X_df.loc[swell_date]
+
+X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast_df = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast_df.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_df = time_index_change_format(Y_df)
+onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)
+onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)
+Y_df.sort_index(inplace=True)
+Y_df = Y_df.loc[set(X_train_df.index.values)]
+# Y_df = Y_df.reindex(set(X_df.index.values))
+Y = Y_df.values
+
+
+# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
 '''
-number_of_var = len(X_train_df.columns)
-first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
-print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 300
-patience_num = 200
-n_fold = 10
-kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
+abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
 
-# 빈 accuracy 배열
-accuracy = []
-Scores = []
-scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
+X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
 
-# 모델의 설정, 컴파일, 실행
-for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
-    print("loop num : ", len(accuracy)+1)
-    print("TRAIN: %d" % len(train_index), "TEST: %d" % len(validation_index))
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
 
-    X_train, X_Validation = X[train_index], X[validation_index]
-    Y_train, Y_Validation = Y[train_index], Y[validation_index]
-    model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
-    edge_num = 2
-    # model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-    while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), kernel_initializer='random_normal'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(Dropout(0.1))
-        edge_num += 1
-    model.add(Dense(1, activation='sigmoid'))
-    print("edge_num : %d" % edge_num)
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']) # 판단근거 https://www.dlology.com/blog/how-to-choose-last-layer-activation-and-loss-function/
-    model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=['accuracy'])  # 판단근거 https://www.dlology.com/blog/how-to-choose-last-layer-activation-and-loss-function/
-
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-    # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
-    # 학습 자동 중단 설정
-    # early_stopping_callback = EarlyStopping(monitor='val_acc', patience=patience_num)
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-
-    history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0, batch_size=len(X_train),
-                        callbacks=[early_stopping_callback, checkpointer])
-    # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
-
-    plt.figure(figsize=(8, 8))
-    # 테스트 셋의 오차
-    # y_acc = history.history['binary_accuracy']
-    y_acc = history.history['acc']
-    # y_vacc = history.history['val_binary_accuracy']
-    y_vacc = history.history['val_acc']
-    y_loss = history.history['loss']
-    y_vloss = history.history['val_loss']
-    # 그래프로 표현
-    x_len = np.arange(len(y_loss))
-    # plt.plot(x_len, y_acc, c="blue", label='binary_accuracy')
-    plt.plot(x_len, y_acc, c="blue", label='acc')
-    # plt.plot(x_len, y_vacc, c="red", label='val_binary_accuracy')
-    plt.plot(x_len, y_vacc, c="red", label='val_acc')
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    # 그래프에 그리드를 주고 레이블을 표시
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
-    plt.ylabel('acc')
-    plt.show()
-
-    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-    file_list.sort()
-    print(file_list[0])
-    model = load_model(MODEL_DIR + file_list[0])
-
-    Score = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-    k_accuracy = "%.4f" % (Score[1])
-    prediction_for_test = np.where(model.predict(X_Validation) < 0.5, 0, 1)
-    print(prediction_for_test.sum())
-    # print("predict : %s" % prediction_for_test)
-    # print("real    : %s" % Y_Validation)
-    Scores.append(score_calculating(Y_Validation, prediction_for_test))
-    print("\nscore guess : %d" % score_calculating(Y_Validation, prediction_for_test))
-    accuracy.append(k_accuracy)
-
-print("\n %.f fold accuracy:" % n_fold, accuracy)
-accuracy = [float(j) for j in accuracy]
-print("mean accuracy %.7f:" % np.mean(accuracy))
-print("score : %s" % Scores)
-print("mean score : %.4f" % np.mean(Scores))
-
-print("--- %s seconds ---" % (time.time() - start_time))
-m, s = divmod((time.time() - start_time), 60)
-print("almost %2f minute" % m)
-
-
-model = Sequential()
-model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
-edge_num = 2
-# model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
-    model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), kernel_initializer='random_normal'))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(Dropout(0.1))
-    edge_num += 1
-model.add(Dense(1, activation='sigmoid'))
-model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=['accuracy'])
-# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['binary_accuracy'])
-
-MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
-if not os.path.exists(MODEL_DIR):
-    os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-# 모델 업데이트 및 저장
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-
-history = model.fit(X, Y, validation_split=0.2, epochs=epochs, verbose=0, batch_size=len(X),
-                    callbacks=[checkpointer, early_stopping_callback])
-
-file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()  # 만든날짜 정렬
-print(file_list[0])
-model = load_model(MODEL_DIR + file_list[0])
-
-prediction_for_test = np.where(model.predict(X_test.values, batch_size=len(X_test)) < 0.5, 0, 1)
-# for timeAndDate, predic in zip(X_test.index.values, prediction_for_test):
-#     print("%s" % timeAndDate, ": %d" % predic)
-prediction_for_test_DF_DateGuWall = pd.DataFrame(data=prediction_for_test, index=X_test.index.values)
-
-# print(prediction_for_test_DF_DateGuWall)
-print(prediction_for_test_DF_DateGuWall.sum())
-print(prediction_for_test_DF_DateGuWall.shape)
-prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWall.csv', encoding='utf-8')
-
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
 '''
+# 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
+abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([normal_date_X_df, abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# swell로만 학습 : 형편없다. 나중에 결과를 합치는데 써봐야할 것이다.
+'''
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([swell_date_X_df])
+X = X_train_df.values.astype('float32')
+X_scaler = MinMaxScaler(feature_range=(0, 1))
+X = X_scaler.fit_transform(X)
+X_test = X_df.loc[test_dates_in_X_df]
+
+Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
+'''
+
+test_size = 0.33
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=None)
+y_test = y_test.flatten().tolist()
+y_train = y_train.flatten().tolist()
+# fit model no training data
+model = XGBClassifier()
+model.fit(X_train, y_train)
+# make predictions for test data
+y_pred = model.predict(X_test)
+predictions = [round(value) for value in y_pred]
+print(y_pred.sum())
+# print(np.asarray(predictions).sum())
+# evaluate predictions
+accuracy = accuracy_score(y_test, predictions)
+print("scoring : %d" % score_calculating(y_test, predictions))
+print("Accuracy: %.2f%%" % (accuracy * 100.0))
+# print(model.feature_importances_)
+varList = []
+for num in range(len(model.feature_importances_)):
+    # varName = 'f' + str(num)
+    # varList.append(varName)
+    varList.append(num)
+var_feature_imp = pd.DataFrame(data=varList, index=list(model.feature_importances_))
+var_feature_imp.sort_index(inplace=True, ascending=False)
+var_sortby_featureImp = list(var_feature_imp.values.flatten().tolist())
+# plt.bar(range(len(model.feature_importances_)), model.feature_importances_)
+# plot_importance(model)
+# plt.show()
+scoreList = []
+thresholds = np.sort(model.feature_importances_)
+forecastList = []
+accuracyList = []
+for thresh in thresholds:
+    # select features using threshold
+    selection = SelectFromModel(model, threshold=thresh, prefit=True)
+    select_X_train = selection.transform(X_train)
+    # train model
+    selection_model = XGBClassifier(learning_rate=0.1, n_estimators=1000,
+                                    max_depth=6, min_child_weight=1, gamma=0.4, subsample=0.8, colsample_bytree=0.8,
+                                    objective='binary:logistic', nthread=4, scale_pos_weight=1, seed=42)
+    selection_model.fit(select_X_train, y_train)
+    # eval model
+    select_X_test = selection.transform(X_test)
+    y_pred = selection_model.predict(select_X_test)
+    predictions = [round(value) for value in y_pred]
+    accuracy = accuracy_score(y_test, predictions)
+    Score = score_calculating(y_test, predictions)
+    scoreList.append(Score)
+    print("Thresh=%.3f, n=%d, Accuracy: %.2f%% , Score: %d, OneCount : %d"
+          % (thresh, select_X_train.shape[1], accuracy*100.0, Score, np.asarray(predictions).sum()))
+    accuracyList.append(accuracy*100.0)
+    # y_fore = selection_model.predict( X_forecast_df.iloc[list(var_sortby_featureImp[:select_X_train.shape[1]])].values )
+    y_fore = selection_model.predict(selection.transform(X_forecast))
+    forecast = [round(value) for value in y_fore]
+    forecastList.append(forecast)
+    print("Onecount : %d " % np.asanyarray(forecast).sum())
+
+print("mean score : %.4f " % np.mean(scoreList))
+
+idx = scoreList.index(np.max(scoreList))
+print("take %d th thresh hold is fine" % idx)
+print("this is best acc prediction : %s" % forecastList[idx])
+result = pd.DataFrame(data=forecastList[idx], index=X_forecast_df.index)
+result = time_index_change_format(result)
+result.sort_index(inplace=True)
+
+for index, row in Forecast_df.iterrows():
+    if index in result.index:
+        Forecast_df.loc[index] = int(result.loc[index].values)
+# Forecast_df = pd.concat([Forecast_df, result], axis=1, join='inner')
+
+# df.filter(regex='a',axis=0)
+# https://stackoverflow.com/questions/22897195/selecting-rows-with-similar-index-names-in-pandas
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+X_df = pd.read_csv('ind_var_with_DateGuWall.csv', index_col=[0])
+X_df = time_index_change_format(X_df)
+X_df.sort_index(inplace=True)
+
+X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
+test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
+abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
+abnormal_date = time_index_change_format(abnormal_date)
+abnormal_date.sort_index(inplace=True)
+abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
+abnormal_date = set(abnormal_date).intersection(X_df_index)
+
+swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+swell_date = time_index_change_format(swell_date)
+swell_date.sort_index(inplace=True)
+swell_date = swell_date[swell_date['0'] == 1].index.values
+swell_date = set(swell_date).intersection(X_df_index)
+
+# normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
+normal_date = (X_df_index-swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
+print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
+
+
+# 오버 샘플링 없이 모든 데이터 사용 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+# normal_date_X_df = X_df.loc[normal_date]
+# abnormal_date_X_df = X_df.loc[abnormal_date]
+# swell_date_X_df = X_df.loc[swell_date]
+X_train_df = X_df.loc[X_df_index]
+
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
+
+abnormal_date_X_df = X_df.loc[abnormal_date]
+swell_date_X_df = X_df.loc[swell_date]
+
+X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast_df = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast_df.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_df = time_index_change_format(Y_df)
+onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)
+onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)
+Y_df.sort_index(inplace=True)
+Y_df = Y_df.loc[set(X_train_df.index.values)]
+# Y_df = Y_df.reindex(set(X_df.index.values))
+Y = Y_df.values
+
+# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
+abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([normal_date_X_df, abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# swell로만 학습 : 형편없다. 나중에 결과를 합치는데 써봐야할 것이다.
+'''
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([swell_date_X_df])
+X = X_train_df.values.astype('float32')
+X_scaler = MinMaxScaler(feature_range=(0, 1))
+X = X_scaler.fit_transform(X)
+X_test = X_df.loc[test_dates_in_X_df]
+
+Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
+'''
+
+test_size = 0.33
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=None)
+y_test = y_test.flatten().tolist()
+y_train = y_train.flatten().tolist()
+# fit model no training data
+model = XGBClassifier()
+model.fit(X_train, y_train)
+# make predictions for test data
+y_pred = model.predict(X_test)
+predictions = [round(value) for value in y_pred]
+print(y_pred.sum())
+# print(np.asarray(predictions).sum())
+# evaluate predictions
+accuracy = accuracy_score(y_test, predictions)
+print("scoring : %d" % score_calculating(y_test, predictions))
+print("Accuracy: %.2f%%" % (accuracy * 100.0))
+# print(model.feature_importances_)
+varList = []
+for num in range(len(model.feature_importances_)):
+    # varName = 'f' + str(num)
+    # varList.append(varName)
+    varList.append(num)
+var_feature_imp = pd.DataFrame(data=varList, index=list(model.feature_importances_))
+var_feature_imp.sort_index(inplace=True, ascending=False)
+var_sortby_featureImp = list(var_feature_imp.values.flatten().tolist())
+# plt.bar(range(len(model.feature_importances_)), model.feature_importances_)
+# plot_importance(model)
+# plt.show()
+scoreList = []
+thresholds = np.sort(model.feature_importances_)
+forecastList = []
+accuracyList = []
+for thresh in thresholds:
+    # select features using threshold
+    selection = SelectFromModel(model, threshold=thresh, prefit=True)
+    select_X_train = selection.transform(X_train)
+    # train model
+    selection_model = XGBClassifier(learning_rate=0.1, n_estimators=1000,
+                                    max_depth=6, min_child_weight=1, gamma=0.4, subsample=0.8, colsample_bytree=0.8,
+                                    objective='binary:logistic', nthread=4, scale_pos_weight=1, seed=42)
+    selection_model.fit(select_X_train, y_train)
+    # eval model
+    select_X_test = selection.transform(X_test)
+    y_pred = selection_model.predict(select_X_test)
+    predictions = [round(value) for value in y_pred]
+    accuracy = accuracy_score(y_test, predictions)
+    Score = score_calculating(y_test, predictions)
+    scoreList.append(Score)
+    print("Thresh=%.3f, n=%d, Accuracy: %.2f%% , Score: %d, OneCount : %d"
+          % (thresh, select_X_train.shape[1], accuracy*100.0, Score, np.asarray(predictions).sum()))
+    accuracyList.append(accuracy*100.0)
+    # y_fore = selection_model.predict( X_forecast_df.iloc[list(var_sortby_featureImp[:select_X_train.shape[1]])].values )
+    y_fore = selection_model.predict(selection.transform(X_forecast))
+    forecast = [round(value) for value in y_fore]
+    forecastList.append(forecast)
+    print("Onecount : %d " % np.asanyarray(forecast).sum())
+
+print("mean score : %.4f " % np.mean(scoreList))
+
+idx = scoreList.index(np.max(scoreList))
+print("take %d th thresh hold is fine" % idx)
+print("this is best acc prediction : %s" % forecastList[idx])
+result = pd.DataFrame(data=forecastList[idx], index=X_forecast_df.index)
+result = time_index_change_format(result)
+result.sort_index(inplace=True)
+
+for index, row in Forecast_df.iterrows():
+    if index in result.index:
+        Forecast_df.loc[index] = int(result.loc[index].values)
+# Forecast_df = pd.concat([Forecast_df, result], axis=1, join='inner')
+
+
+
+
+
+
+
+
+
+X_df = pd.read_csv('ind_var_with_DateGuWallPo.csv', index_col=[0])
+X_df = time_index_change_format(X_df)
+X_df.sort_index(inplace=True)
+
+X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
+test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
+abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
+abnormal_date = time_index_change_format(abnormal_date)
+abnormal_date.sort_index(inplace=True)
+abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
+abnormal_date = set(abnormal_date).intersection(X_df_index)
+
+swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+swell_date = time_index_change_format(swell_date)
+swell_date.sort_index(inplace=True)
+swell_date = swell_date[swell_date['0'] == 1].index.values
+swell_date = set(swell_date).intersection(X_df_index)
+
+# normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
+normal_date = (X_df_index-swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
+print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
+
+
+# 오버 샘플링 없이 모든 데이터 사용 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+# normal_date_X_df = X_df.loc[normal_date]
+# abnormal_date_X_df = X_df.loc[abnormal_date]
+# swell_date_X_df = X_df.loc[swell_date]
+X_train_df = X_df.loc[X_df_index]
+
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
+
+abnormal_date_X_df = X_df.loc[abnormal_date]
+swell_date_X_df = X_df.loc[swell_date]
+
+X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast_df = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast_df.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_df = time_index_change_format(Y_df)
+onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)
+onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)
+Y_df.sort_index(inplace=True)
+Y_df = Y_df.loc[set(X_train_df.index.values)]
+# Y_df = Y_df.reindex(set(X_df.index.values))
+Y = Y_df.values
+
+
+# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
+'''
+normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
+abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([normal_date_X_df, abnormal_date_X_df, swell_date_X_df])
+X = X_train_df.values.astype('float32')
+# X_scaler = MinMaxScaler(feature_range=(0, 1))
+# X = X_scaler.fit_transform(X)
+
+X_forecast = X_df.loc[test_dates_in_X_df]
+X_forecast = X_forecast.values.astype('float32')
+
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values
+'''
+# swell로만 학습 : 형편없다. 나중에 결과를 합치는데 써봐야할 것이다.
+'''
+swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
+
+X_train_df = pd.concat([swell_date_X_df])
+X = X_train_df.values.astype('float32')
+X_scaler = MinMaxScaler(feature_range=(0, 1))
+X = X_scaler.fit_transform(X)
+X_test = X_df.loc[test_dates_in_X_df]
+
+Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
+Y_train_df = Y_df.loc[set(X_train_df.index.values)]
+Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
+'''
+
+test_size = 0.33
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=None)
+y_test = y_test.flatten().tolist()
+y_train = y_train.flatten().tolist()
+# fit model no training data
+model = XGBClassifier()
+model.fit(X_train, y_train)
+# make predictions for test data
+y_pred = model.predict(X_test)
+predictions = [round(value) for value in y_pred]
+print(y_pred.sum())
+# print(np.asarray(predictions).sum())
+# evaluate predictions
+accuracy = accuracy_score(y_test, predictions)
+print("scoring : %d" % score_calculating(y_test, predictions))
+print("Accuracy: %.2f%%" % (accuracy * 100.0))
+# print(model.feature_importances_)
+varList = []
+for num in range(len(model.feature_importances_)):
+    # varName = 'f' + str(num)
+    # varList.append(varName)
+    varList.append(num)
+var_feature_imp = pd.DataFrame(data=varList, index=list(model.feature_importances_))
+var_feature_imp.sort_index(inplace=True, ascending=False)
+var_sortby_featureImp = list(var_feature_imp.values.flatten().tolist())
+# plt.bar(range(len(model.feature_importances_)), model.feature_importances_)
+# plot_importance(model)
+# plt.show()
+scoreList = []
+thresholds = np.sort(model.feature_importances_)
+forecastList = []
+accuracyList = []
+for thresh in thresholds:
+    # select features using threshold
+    selection = SelectFromModel(model, threshold=thresh, prefit=True)
+    select_X_train = selection.transform(X_train)
+    # train model
+    selection_model = XGBClassifier(learning_rate=0.1, n_estimators=1000,
+                                    max_depth=6, min_child_weight=1, gamma=0.4, subsample=0.8, colsample_bytree=0.8,
+                                    objective='binary:logistic', nthread=4, scale_pos_weight=1, seed=42)
+    selection_model.fit(select_X_train, y_train)
+    # eval model
+    select_X_test = selection.transform(X_test)
+    y_pred = selection_model.predict(select_X_test)
+    predictions = [round(value) for value in y_pred]
+    accuracy = accuracy_score(y_test, predictions)
+    Score = score_calculating(y_test, predictions)
+    scoreList.append(Score)
+    print("Thresh=%.3f, n=%d, Accuracy: %.2f%% , Score: %d, OneCount : %d"
+          % (thresh, select_X_train.shape[1], accuracy*100.0, Score, np.asarray(predictions).sum()))
+    accuracyList.append(accuracy*100.0)
+    # y_fore = selection_model.predict( X_forecast_df.iloc[list(var_sortby_featureImp[:select_X_train.shape[1]])].values )
+    y_fore = selection_model.predict(selection.transform(X_forecast))
+    forecast = [round(value) for value in y_fore]
+    forecastList.append(forecast)
+    print("Onecount : %d " % np.asanyarray(forecast).sum())
+
+print("mean score : %.4f " % np.mean(scoreList))
+
+idx = scoreList.index(np.max(scoreList))
+print("take %d th thresh hold is fine" % idx)
+print("this is best acc prediction : %s" % forecastList[idx])
+result = pd.DataFrame(data=forecastList[idx], index=X_forecast_df.index)
+result = time_index_change_format(result)
+result.sort_index(inplace=True)
+for index, row in Forecast_df.iterrows():
+    if index in result.index:
+        Forecast_df.loc[index] = int(result.loc[index].values)
+# Forecast_df = pd.concat([Forecast_df, result], axis=1, join='inner')
+
+
+test_dates_notTime_DF = pd.read_csv('test_form.csv', usecols=[0], skiprows=[0, 1])
+test_dates_notTime = test_dates_notTime_DF.values.flatten().tolist()  # 제출해야할 날짜.
+
+# for DATE in test_dates_notTime:
+#     tempDF = Forecast_df.filter(regex=DATE, axis=0).T
+#     # df.filter(regex='a',axis=0) # https://stackoverflow.com/questions/22897195/selecting-rows-with-similar-index-names-in-pandas
+#     commitForm = pd.concat([commitForm, tempDF])
+
+commitForm_dat = Forecast_df.values
+commitForm_dat = np.reshape(commitForm_dat, (-1, 24))
+commitForm = pd.DataFrame(data=commitForm_dat)
+print(commitForm)
+commitForm.to_csv('commitForm.csv', encoding='utf-8')
