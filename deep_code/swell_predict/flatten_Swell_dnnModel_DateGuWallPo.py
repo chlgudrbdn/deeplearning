@@ -172,7 +172,7 @@ number_of_var = len(X_train_df.columns)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
 epochs = 300
-patience_num = 2000
+patience_num = 200
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 

@@ -144,7 +144,7 @@ file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러�
 file_list.sort()
 for model_file in file_list:
     print(model_file)
-    model = load_model(MODEL_DIR + model_file)
+    model = load_model(MODEL_DIR + model_file, custom_objects={'rmse': rmse})
 
     trainPredict = model.predict(trainX, batch_size=1)
     valPredict = model.predict(valX, batch_size=1)
