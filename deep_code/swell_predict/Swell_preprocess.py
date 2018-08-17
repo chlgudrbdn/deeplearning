@@ -44,10 +44,10 @@ data_about_time = pd.DataFrame({'year': years, 'month': months, 'weekday': weekd
                                index=date2014to2017)
 
 swell_Y_DF = pd.DataFrame(data=zeroMatrix, index=date2014to2017)
-time_grid = ["7:00", "8:00", "9:00", "10:00", "11:00", "12:00",
+time_grid = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00",
              "13:00", "14:00", "15:00", "16:00", "17:00", "18:00",
-             "19:00", "20:00", "21:00", "22:00", "23:00", "0:00",
-             "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"]  # 시작시간 기준으로 일단 잡아본다.
+             "19:00", "20:00", "21:00", "22:00", "23:00", "00:00",
+             "01:00", "02:00", "03:00", "04:00", "05:00", "06:00"]  # 시작시간 기준으로 일단 잡아본다.
 swell_Y_DF.columns = time_grid
 
 anotehr_zeroMatrix = np.zeros(((365 * 4) + 1, 24)).astype('int')
@@ -203,6 +203,15 @@ only_swell_date_data.to_csv('only_swell_date_data.csv', encoding='utf-8')
 print('########################---------------flatten된 데이터 가공-------------------#########################')
 
 
+def time_index_change_format(df):
+    as_list = df.index.tolist()
+    for dateAndTime in as_list:
+        position = as_list.index(dateAndTime)
+        as_list[position] = dt.strptime(dateAndTime, '%Y-%m-%d %H:%M').strftime('%Y-%m-%d %H:%M')
+    df.index = as_list
+    return df
+
+
 def rotate(l, n):
     return l[-n:] + l[:-n]
 
@@ -285,8 +294,11 @@ Pohang_hour_17 = pd.read_csv('포항 시간별 해양기상부이 17년.csv', in
 Pohang_hour_17 = Pohang_hour_17.drop(columns=['지점'])
 
 GuRyoungPo_hour = pd.concat([GuRyoungPo_hour_14, GuRyoungPo_hour_15, GuRyoungPo_hour_16, GuRyoungPo_hour_17])
+GuRyoungPo_hour = time_index_change_format(GuRyoungPo_hour)
 WallPo_hour = pd.concat([WallPo_hour_15, WallPo_hour_16, WallPo_hour_17])
+WallPo_hour = time_index_change_format(WallPo_hour)
 Pohang_hour = pd.concat([Pohang_hour_14, Pohang_hour_15, Pohang_hour_16, Pohang_hour_17])
+Pohang_hour = time_index_change_format(Pohang_hour)
 
 GuRyoungPo_hour = GuRyoungPo_hour.fillna(method='ffill', limit=1)
 # print(GuRyoungPo_hour.isnull().sum())
@@ -296,20 +308,20 @@ GuRyoungPo_hour_ommited_time_in_test_dates.sort()
 print("GuRyoungPo_hour_ommited_time_in_test_dates : ")  # 부족한건 월포의 정보로 로 때우던가 해야할 것이다.
 print(GuRyoungPo_hour_ommited_time_in_test_dates)
 print(len(GuRyoungPo_hour_ommited_time_in_test_dates))
-# temp_list = ['2015-06-27 5:00']
+# temp_list = ['2015-06-27 05:00']
 # temp_df = pd.DataFrame(data=GuRyoungPo_hour.loc['2015-06-27 4:00'].values, columns=GuRyoungPo_hour.columns.values, index=temp_list)
 # 20150925이전 날짜에 딱 한칸 부족한건 이전 시간의 데이터로 메운다.
-temp_df = GuRyoungPo_hour.loc['2015-06-27 4:00']
-temp_df.name = '2015-06-27 5:00'
+temp_df = GuRyoungPo_hour.loc['2015-06-27 04:00']
+temp_df.name = '2015-06-27 05:00'
 GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 이렇게하면 36줄 데이터가 부족하고 2015-12-13 24줄과 2016-10-20의 12시 이후 데이터만 부족. 2일치만 예측이 불가능.
-notOclockAtGuRyoungPo_hour = ['2014-05-02 9:17', '2014-05-02 9:45', '2014-05-21 16:01', '2014-05-21 16:58', '2014-05-21 17:36',
-                              '2014-12-23 16:16', '2015-06-15 7:08', '2015-06-24 7:45', '2015-10-23 2:05', '2015-10-23 9:35', '2015-12-01 10:25']
+notOclockAtGuRyoungPo_hour = ['2014-05-02 09:17', '2014-05-02 09:45', '2014-05-21 16:01', '2014-05-21 16:58', '2014-05-21 17:36',
+                              '2014-12-23 16:16', '2015-06-15 07:08', '2015-06-24 07:45', '2015-10-23 02:05', '2015-10-23 09:35', '2015-12-01 10:25']
 
 #  정각이 아닌 시간대 자료. 11건. 수작업으로 처리.
 as_list = GuRyoungPo_hour.index.tolist()
 # for dateAndTime in as_list:
 
-temp_df = GuRyoungPo_hour.loc['2014-05-02 9:00']
+temp_df = GuRyoungPo_hour.loc['2014-05-02 09:00']
 temp_df.name = '2014-05-02 10:00'
 GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 근처 2개 지우고 10시 것을 이전 값으로 추가.
 temp_df = GuRyoungPo_hour.loc['2014-05-21 16:01']
@@ -321,15 +333,15 @@ GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 비슷한 시간대의 자�
 temp_df = GuRyoungPo_hour.loc['2014-12-23 15:00']
 temp_df.name = '2014-12-23 16:00'
 GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 불완전한 데이터 지우고 이전것으로 대체
-temp_df = GuRyoungPo_hour.loc['2015-06-15 5:00']
-temp_df.name = '2015-06-15 6:00'
+temp_df = GuRyoungPo_hour.loc['2015-06-15 05:00']
+temp_df.name = '2015-06-15 06:00'
 GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 불완전한 데이터 지우고 이전것으로 대체
-temp_df = GuRyoungPo_hour.loc['2015-06-15 5:00']
-temp_df.name = '2015-06-15 7:00'
+temp_df = GuRyoungPo_hour.loc['2015-06-15 05:00']
+temp_df.name = '2015-06-15 07:00'
 GuRyoungPo_hour = GuRyoungPo_hour.append(temp_df)  # 불완전한 데이터 지우고 이전것으로 대체
-GuRyoungPo_hour = GuRyoungPo_hour.drop(['2014-05-02 9:17', '2014-05-02 9:45', '2014-05-21 16:01', '2014-05-21 16:58',
-                                        '2014-05-21 17:36', '2014-12-23 16:16', '2015-06-15 7:08', '2015-06-24 7:45',
-                                        '2015-06-24 9:00', '2015-10-23 2:05', '2015-10-23 9:35', '2015-12-01 10:25'])
+GuRyoungPo_hour = GuRyoungPo_hour.drop(['2014-05-02 09:17', '2014-05-02 09:45', '2014-05-21 16:01', '2014-05-21 16:58',
+                                        '2014-05-21 17:36', '2014-12-23 16:16', '2015-06-15 07:08', '2015-06-24 07:45',
+                                        '2015-06-24 09:00', '2015-10-23 02:05', '2015-10-23 09:35', '2015-12-01 10:25'])
 # GuRyoungPo_hour.sort_index(inplace=True)
 
 WallPo_hour = WallPo_hour.fillna(method='ffill', limit=1)
@@ -343,7 +355,7 @@ print(WallPo_hour_ommited_time_in_test_dates_after_20150925_1000)
 print(len(WallPo_hour_ommited_time_in_test_dates_after_20150925_1000))  # 분기점 이후에는 47개 부족
 # '2015-11-13 12:00', '2015-12-13 19:00', '2016-12-26 10:00', '2017-10-23 22:00' 만처리하면 2016-03-04, 2017-03-15(0~4시까지 빔)
 
-temp_list_for_fill_one_section_before_1hour = ['2015-11-13 11:00', '2015-12-13 18:00', '2016-12-26 9:00', '2017-10-23 21:00']  # 이걸 불러
+temp_list_for_fill_one_section_before_1hour = ['2015-11-13 11:00', '2015-12-13 18:00', '2016-12-26 09:00', '2017-10-23 21:00']  # 이걸 불러
 temp_list_for_fill_one_section = ['2015-11-13 12:00', '2015-12-13 19:00', '2016-12-26 10:00', '2017-10-23 22:00']  # 이걸로 바꾼다
 # temp_df_list = pd.DataFrame()
 for i in range(len(temp_list_for_fill_one_section_before_1hour)):
@@ -354,7 +366,6 @@ for i in range(len(temp_list_for_fill_one_section_before_1hour)):
 
 WallPo_hour_ommited_time_in_test_dates = list(set(test_dates_times) - set(WallPo_hour.index.values))
 WallPo_hour_ommited_time_in_test_dates_after_20150925_1000 = list(filter(lambda x: x > '2015-09-25 10:00', WallPo_hour_ommited_time_in_test_dates))
-# '2015-09-25 10:00'는 '2015-09-25 9:00'보다 작아서 문제가 될 수 있으나 사실 이 이전의 데이터는 존재하지 않아 큰 문제는 없다.
 
 GuWall_info_lack_time = set(WallPo_hour_ommited_time_in_test_dates_after_20150925_1000).intersection(GuRyoungPo_hour_ommited_time_in_test_dates)
 print("GuWall_info_lack_time : %s" % GuWall_info_lack_time)  # 원래는 꽤 비는 부분이 많았으나 결국 줄이고 줄여서 둘 다 없는 부분은 일단 제거됨.
@@ -416,54 +427,75 @@ for i in list(comb):
 # 4개 조합 : 2개 (포항은 크게 2가지)
 ind_var_with_DateGuWallPo = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_DateGuWallPo.to_csv('ind_var_with_DateGuWallPo.csv', encoding='utf-8')
+print("ind_var_with_DateGuWallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWallPo.index.values))
 ind_var_with_DateGuWallPo_withoutwind = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DateGuWallPo_withoutwind.to_csv('ind_var_with_DateGuWallPo_withoutwind.csv', encoding='utf-8')
-
+print("ind_var_with_DateGuWallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWallPo_withoutwind.index.values))
 # 3개 조합 : 4*2개
 ind_var_with_DateGuWall = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateGuWall.to_csv('ind_var_with_DateGuWall.csv', encoding='utf-8')
+print("ind_var_with_DateGuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWall.index.values))
 ind_var_with_DateGuPo = pd.concat([data_about_time_flatten, GuRyoungPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_DateGuPo.to_csv('ind_var_with_DateGuPo.csv', encoding='utf-8')
+print("ind_var_with_DateGuPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuPo.index.values))
 ind_var_with_DateWallPo = pd.concat([data_about_time_flatten, WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_DateWallPo.to_csv('ind_var_with_DateWallPo.csv', encoding='utf-8')
+print("ind_var_with_DateWallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWallPo.index.values))
 ind_var_with_GuWallPo = pd.concat([GuRyoungPo_hour, WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_GuWallPo.to_csv('ind_var_with_GuWallPo.csv', encoding='utf-8')
+print("ind_var_with_GuWallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWallPo.index.values))
 
 ind_var_with_DateGuWall = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateGuWall.to_csv('ind_var_with_DateGuWall.csv', encoding='utf-8')
+print("ind_var_with_DateGuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWall.index.values))
 ind_var_with_DateGuPo_withoutwind = pd.concat([data_about_time_flatten, GuRyoungPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DateGuPo_withoutwind.to_csv('ind_var_with_DateGuPo_withoutwind.csv', encoding='utf-8')
+print("ind_var_with_DateGuPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuPo_withoutwind.index.values))
 ind_var_with_DateWallPo_withoutwind = pd.concat([data_about_time_flatten, WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DateWallPo_withoutwind.to_csv('ind_var_with_DateWallPo_withoutwind.csv', encoding='utf-8')
+print("ind_var_with_DateWallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWallPo_withoutwind.index.values))
 ind_var_with_GuWallPo_withoutwind = pd.concat([GuRyoungPo_hour, WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_GuWallPo_withoutwind.to_csv('ind_var_with_GuWallPo_withoutwind.csv', encoding='utf-8')
+print("ind_var_with_GuWallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWallPo_withoutwind.index.values))
 
 # 2개 조합 : 6개
 ind_var_with_DateGu = pd.concat([data_about_time_flatten, GuRyoungPo_hour], axis=1, join='inner')
 ind_var_with_DateGu.to_csv('ind_var_with_DateGu.csv', encoding='utf-8')
+print("ind_var_with_DateGu can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGu.index.values))
 ind_var_with_DateWall = pd.concat([data_about_time_flatten, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateWall.to_csv('ind_var_with_DateWall.csv', encoding='utf-8')
+print("ind_var_with_DateWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWall.index.values))
 ind_var_with_DatePo = pd.concat([data_about_time_flatten, Pohang_hour], axis=1, join='inner')
 ind_var_with_DatePo.to_csv('ind_var_with_DatePo.csv', encoding='utf-8')
+print("ind_var_with_DatePo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DatePo.index.values))
 ind_var_with_GuWall = pd.concat([GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_GuWall.to_csv('ind_var_with_GuWall.csv', encoding='utf-8')
+print("ind_var_with_GuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWall.index.values))
 ind_var_with_GuPo = pd.concat([GuRyoungPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_GuPo.to_csv('ind_var_with_GuPo.csv', encoding='utf-8')
+print("ind_var_with_GuPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuPo.index.values))
 ind_var_with_WallPo = pd.concat([WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_WallPo.to_csv('ind_var_with_WallPo.csv', encoding='utf-8')
+print("ind_var_with_WallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_WallPo.index.values))
 
 ind_var_with_DateGu = pd.concat([data_about_time_flatten, GuRyoungPo_hour], axis=1, join='inner')
 ind_var_with_DateGu.to_csv('ind_var_with_DateGu.csv', encoding='utf-8')
+print("ind_var_with_DateGu can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGu.index.values))
 ind_var_with_DateWall = pd.concat([data_about_time_flatten, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateWall.to_csv('ind_var_with_DateWall.csv', encoding='utf-8')
+print("ind_var_with_DateWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWall.index.values))
 ind_var_with_DatePo_withoutwind = pd.concat([data_about_time_flatten, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DatePo_withoutwind.to_csv('ind_var_with_DatePo_withoutwind.csv', encoding='utf-8')
+print("ind_var_with_DatePo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DatePo_withoutwind.index.values))
 ind_var_with_GuWall = pd.concat([GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_GuWall.to_csv('ind_var_with_GuWall.csv', encoding='utf-8')
+print("ind_var_with_GuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWall.index.values))
 ind_var_with_GuPo_withoutwind = pd.concat([GuRyoungPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_GuPo_withoutwind.to_csv('ind_var_with_GuPo_withoutwind.csv', encoding='utf-8')
+print("ind_var_with_GuPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuPo_withoutwind.index.values))
 ind_var_with_WallPo_withoutwind = pd.concat([WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_WallPo_withoutwind.to_csv('ind_var_with_WallPo_withoutwind.csv', encoding='utf-8')
+print("ind_var_with_WallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_WallPo_withoutwind.index.values))
 
 # 1개 조합 : 4개. 이미 위에서 한거다.
 

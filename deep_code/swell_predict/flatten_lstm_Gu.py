@@ -70,14 +70,6 @@ def score_calculating(true_value, pred_value):
     return Score
 
 
-def time_index_change_format(df):
-    as_list = df.index.tolist()
-    for dateAndTime in as_list:
-        position = as_list.index(dateAndTime)
-        as_list[position] = dt.strptime(dateAndTime, '%Y-%m-%d %H:%M').strftime('%Y-%m-%d %H:%M')
-    df.index = as_list
-    return df
-
 
 # fix random seed for reproducibility
 seed = 42
@@ -92,24 +84,20 @@ K.set_session(sess)
 tf.global_variables_initializer()
 
 test_dates_df = pd.read_csv('test_dates_times.csv', index_col=[1], skiprows=0)
-test_dates_df = time_index_change_format(test_dates_df)
 test_dates_df.sort_index(inplace=True)
 test_dates = test_dates_df.index.values.flatten().tolist()
 # 데이터 불러오기
 X_df = pd.read_csv('GuRyoungPo_hour.csv', index_col=[0])
-X_df = time_index_change_format(X_df)
 X_df.sort_index(inplace=True)
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
 abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
-abnormal_date = time_index_change_format(abnormal_date)
 abnormal_date.sort_index(inplace=True)
 abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
 abnormal_date = set(abnormal_date).intersection(X_df_index)
 
 swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-swell_date = time_index_change_format(swell_date)
 swell_date.sort_index(inplace=True)
 swell_date = swell_date[swell_date['0'] == 1].index.values
 swell_date = set(swell_date).intersection(X_df_index)
@@ -133,7 +121,6 @@ X = X_train_df.values.astype('float32')
 X_test = X_df.loc[test_dates_in_X_df]
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-Y_df = time_index_change_format(Y_df)
 onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)
 onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)
 Y_df.sort_index(inplace=True)
@@ -233,7 +220,8 @@ scaled = scaler.fit_transform(values)
 
 # frame as supervised learning
 reframed = series_to_supervised(scaled, n_hours, 1)
-print("reframed.shape : %s" % reframed.shape)
+reframed.drop(reframed.columns[-n_features: ], axis=1, inplace=True)
+# print("reframed.shape : %s" % reframed.shape)
 first_layer_node_cnt = int(reframed.shape[1]*(reframed.shape[1]-1)/2)
 # print("first_layer_node_cnt %d" % first_layer_node_cnt)
 
@@ -244,13 +232,13 @@ train = values[:n_train_hours, :]
 test = values[n_train_hours: n_train_hours+24, :]
 # split into input and outputs
 n_obs = n_hours * n_features
-train_X, train_y = train[:, :n_obs], train[:, -n_features]
-test_X, test_y = test[:, :n_obs], test[:, -n_features]
-print("train_X.shape, len(train_X), train_y.shape : %s" % train_X.shape, len(train_X), train_y.shape)
+train_X, train_y = train[:, :-1], train[:, -1]
+test_X, test_y = test[:, :-1], test[:, -1]
+# print("train_X.shape, len(train_X), train_y.shape : %s" % train_X.shape, len(train_X), train_y.shape)
 # reshape input to be 3D [samples, timesteps, features]
-train_X = train_X.reshape((train_X.shape[0], n_hours, n_features))
-test_X = test_X.reshape((test_X.shape[0], n_hours, n_features))
-print("train_X.shape, train_y.shape, test_X.shape, test_y.shape : %s" % train_X.shape, train_y.shape, test_X.shape, test_y.shape)
+train_X = train_X.reshape((train_X.shape[0], n_hours, train_X.shape[1]))
+test_X = test_X.reshape((test_X.shape[0], n_hours, test_X.shape[1]))
+# print("train_X.shape, train_y.shape, test_X.shape, test_y.shape : %s" % train_X.shape, train_y.shape, test_X.shape, test_y.shape)
 
 # 빈 accuracy 배열
 accuracy = []
@@ -281,14 +269,15 @@ plt.plot(x_len, y_vloss, c="orange", label='val_loss')
 
 # make a prediction
 yhat = model.predict(test_X)
-test_X = test_X.reshape((test_X.shape[0], n_hours * n_features))
+test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))
+# test_X = test_X.reshape((test_X.shape[0], n_hours * n_features))
 # invert scaling for forecast
-inv_yhat = np.concatenate((yhat, test_X[:, -7:]), axis=1)
+inv_yhat = np.concatenate((yhat, test_X[:, 1:]), axis=1)
 inv_yhat = scaler.inverse_transform(inv_yhat)
 inv_yhat = inv_yhat[:, 0]
 # invert scaling for actual
 test_y = test_y.reshape((len(test_y), 1))
-inv_y = np.concatenate((test_y, test_X[:, -7:]), axis=1)
+inv_y = np.concatenate((test_y, test_X[:, 1:]), axis=1)
 inv_y = scaler.inverse_transform(inv_y)
 inv_y = inv_y[:, 0]
 # calculate RMSE
