@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# 코드 내부에 한글을 사용가능 하게 해주는 부분입니다.
 
 from keras.preprocessing import sequence
 from keras.models import Sequential

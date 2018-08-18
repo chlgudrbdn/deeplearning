@@ -9,8 +9,8 @@ from sklearn.feature_extraction.text import CountVectorizer
 from collections import OrderedDict, defaultdict
 from keras.preprocessing import sequence
 from collections import Counter
+from datetime import datetime as dt
 
-# filename = os.getcwd() + '\menu.csv'
 menu_df = pd.read_csv('menu.csv', index_col=[1, 2])
 menu_df = menu_df.drop(columns=['Unnamed: 0'])
 menu_df_sum = menu_df.groupby(level=[0, 1]).sum()
@@ -69,18 +69,23 @@ collection_data = pd.merge(meal_demand_df_sum.reset_index(), menu_df_sum.reset_i
                            on=['일자', '식사명'], how='outer').set_index(['일자', '식사명'])
 collection_data = pd.merge(collection_data.reset_index(), embedded_menu_list_padded_df.reset_index(),
                            on=['일자', '식사명'], how='outer').set_index(['일자', '식사명'])
-dates_list = [dt.strptime(date, '%Y-%m-%d').date() for date in date2014to2017]
+
+dates_list = [dt.strptime(str(date), '%Y%m%d') for date in list(collection_data.index.get_level_values('일자'))]
 years = []
 months = []
 weekdays = []
 weeknums = []
+days = []
 for date in dates_list:
     years.append(date.year)
     months.append(date.month)
-    weekdays.append(date.weekday() + 1)  # 월요일이 1. 일요일이 7
+    days.append(date.day)
+    weekdays.append(date.weekday())  # 월요일이 1. 일요일이 0, 토요일이 7
     weeknums.append(date.isocalendar()[1])
-data_about_time = pd.DataFrame({'year': years, 'month': months, 'weekday': weekdays, 'weeknums': weeknums},
-                               index=date2014to2017)
+data_about_time = pd.DataFrame({'year': years, 'month': months, 'weekday': weekdays, 'weeknum': weeknums, 'day':days},
+                               index=collection_data.index)
+collection_data = pd.merge(collection_data.reset_index(), data_about_time.reset_index(),
+                           on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
 
 collection_data.to_csv("collection_data.csv", encoding='utf-8')
 # 전처리 과정중에 확인한 사실:
@@ -92,17 +97,24 @@ collection_data_inner = pd.merge(meal_demand_df_sum.reset_index(), menu_df_sum.r
                                  on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
 collection_data_inner = pd.merge(collection_data_inner.reset_index(), embedded_menu_list_padded_df.reset_index(),
                                  on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
+'''
+dates_list = [dt.strptime(str(date), '%Y%m%d') for date in list(collection_data_inner.index.get_level_values('일자'))]
+years = []
+months = []
+weekdays = []
+weeknums = []
+days = []
+for date in dates_list:
+    years.append(date.year)
+    months.append(date.month)
+    days.append(date.day)
+    weekdays.append(date.weekday())  # 월요일이 1. 일요일이 0, 토요일이 7
+    weeknums.append(date.isocalendar()[1])
+
+data_about_time = pd.DataFrame({'year': years, 'month': months, 'weekday': weekdays, 'weeknum': weeknums, 'day':days},
+                               index=collection_data_inner.index.values)
+'''
+collection_data_inner = pd.merge(collection_data_inner.reset_index(), data_about_time.reset_index(),
+                                 on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
+
 collection_data_inner.to_csv("collection_data_inner.csv", encoding='utf-8')
-
-
-'''
-
-# new_menu_list = numpy.asarray(new_menu_list)
-
-# new_menu_list_df = pandas.DataFrame(data={"식사명":list(dataframe['식사명'].values),
-#                                        "식사내용":list(new_menu_list)}, index=list(dataframe['일자']))
-# new_menu_list_df.to_csv('menu_preprocessed.csv', encoding='utf-8')
-
-
-'''
-
