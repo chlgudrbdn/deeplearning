@@ -24,21 +24,6 @@ import math
 import time
 start_time = time.time()
 
-
-def ordering_meal(mealList):
-    mealOrdered = []
-    for meal in mealList:
-        if meal == '아침식사':
-            mealOrdered.append(1)
-        elif meal == '점심식사':
-            mealOrdered.append(2)
-        elif meal == '점심식사2':
-            mealOrdered.append(3)
-        elif meal == '저녁식사':
-            mealOrdered.append(4)
-    return mealOrdered
-
-
 # fix random seed for reproducibility
 seed = 42
 os.environ['PYTHONHASHSEED'] = '0'
@@ -90,22 +75,22 @@ X_test = test_date_df.values
 
 
 number_of_var = X.shape[1]
-first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
+first_layer_node_cnt = int(((number_of_var-22)*(number_of_var-23))/2)
+# first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 200
-patience_num = 100
+epochs = 5000
+patience_num = 2000
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
 rmse_Scores = []
+textrmse_Scores = []
+
 trainScoreList = []
 valScoreList = []
 
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
-
-
-'''
 for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
     print("loop num : ", len(rmse_Scores)+1)
     # print("TRAIN: %d" % len(train_index), "TEST: %d" % len(validation_index))
@@ -113,7 +98,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     Y_train, Y_Validation = Y[train_index], Y[validation_index]
 
     model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
+    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var-22, activation='relu'))
     edge_num = 2
     while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
         model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), activation='relu'))
@@ -121,59 +106,47 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
         edge_num += 1
     model.add(Dense(1))
     print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam', metrics=[rmse])
-    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
+    model.compile(loss='mse', optimizer='adam')
+    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999))
 
     # 모델 저장 폴더 만들기
     MODEL_DIR = './' + scriptName + ' model_loopNum' + str(len(rmse_Scores)).zfill(2) + '/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR + "{val_rmse:.9f}.hdf5"
+    modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
     # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_rmse', patience=patience_num)
+    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
     # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-    history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0,
-                        callbacks=[early_stopping_callback], batch_size=len(X_train))
+    history = model.fit(X_train[:, 22:], Y_train, validation_data=(X_Validation[:, 22:], Y_Validation), epochs=epochs, verbose=0,
+                        callbacks=[early_stopping_callback, checkpointer], batch_size=len(X_train))
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2))
     # 테스트 셋의 오차
-    y_rmse = history.history['rmse']
-    y_vrmse = history.history['val_rmse']
     y_loss = history.history['loss']
     y_vloss = history.history['val_loss']
     # 그래프로 표현
+    plt.ylim(0.0, 200.0)
     x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_rmse, c="blue", label='y_rmse')
-    plt.plot(x_len, y_vrmse, c="red", label='y_vrmse')
     plt.plot(x_len, y_loss, c="green", label='loss')
     plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
     plt.legend(loc='upper left')
     plt.grid()
     plt.xlabel('epoch')
     plt.ylabel('rmse')
     plt.show()
 
+    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
+    file_list = [float(fileName[:-5]) for fileName in file_list]
+    file_list.sort()  # 만든날짜 정렬
+    model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
     evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
 
-    prediction_for_train = model.predict(X_train, batch_size=len(X_Validation))
-    prediction_for_val = model.predict(X_Validation, batch_size=len(X_Validation))
-
-    trainScore = math.sqrt(mean_squared_error(Y_train, prediction_for_train[:, 0]))
-    print('Train Score: %.4f RMSE' % trainScore)
-    trainScoreList.append(trainScore)
-    valScore = math.sqrt(mean_squared_error(X_Validation, prediction_for_val[:, 0]))
-    print('Val Score: %.4f RMSE' % valScore)
-
-    # print("predict : %s" % prediction_for_val)
-    # print("real    : %s" % Y_Validation)
-    rmse_Scores.append(evalScore[1])
+    rmse_Scores.append(math.sqrt(evalScore))
+    prediction_for_val = model.predict(X_Validation[:, 22:], batch_size=len(X_Validation))
     '''
-
-'''
     text_anal_model = Sequential()
     text_anal_model.add(Embedding(3076, 22))  # Embedding층은 데이터 전처리 과정 통해 입력된 값을 받아 다음 층이 알아들을 수 있는 형태로 변환하는 역할. (불러온 단어의 총 개수, 기사당 단어 수). 1000가지 단어를 각 샘플마다 100개씩 feature로 갖고 있다.
     text_anal_model.add(LSTM(11*21, activation='relu'))
@@ -195,7 +168,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
 
     text_anal_history = text_anal_model.fit(X_train[:, :22], Y_train, batch_size=len(X_train), verbose=0,
-                                            epochs=epochs, validation_data=(X_Validation[:, :22], Y_Validation))
+                                            epochs=50, validation_data=(X_Validation[:, :22], Y_Validation))
 
     plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2) )
     y_loss = text_anal_history.history['loss']
@@ -211,13 +184,12 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     plt.show()
 
     evalScore = text_anal_model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-    rmse_Scores.append(evalScore)
+    textrmse_Scores.append(math.sqrt(evalScore))
 
     '''
-
-print("--- %s seconds ---" % (time.time() - start_time))
-m, s = divmod((time.time() - start_time), 60)
-print("almost %2f minute" % m)
+    print("--- %s seconds ---" % (time.time() - start_time))
+    m, s = divmod((time.time() - start_time), 60)
+    print("almost %2f minute" % m)
 
 print("\n %d fold rmse: %s" % (n_fold, rmse_Scores))
 print("mean accuracy %.7f:" % np.mean(rmse_Scores))
