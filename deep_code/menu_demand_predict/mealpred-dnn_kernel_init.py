@@ -98,10 +98,10 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     X_train, X_Validation = X[train_index], X[validation_index]
     Y_train, Y_Validation = Y[train_index], Y[validation_index]
     model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
+    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
     edge_num = 2
     while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
+        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu', kernel_initializer='random_normal'))
         model.add(Dropout(0.3))
         edge_num += 1
     model.add(Dense(1))
@@ -123,7 +123,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
                         callbacks=[checkpointer, early_stopping_callback], batch_size=32)
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2) )
     # 테스트 셋의 오차
     # y_rmse = history.history['rmse']
     # y_vrmse = history.history['val_rmse']
@@ -169,35 +169,30 @@ print("mean rmse %.7f:" % np.mean(rmse_Scores))
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
-'''
-dropout : 0.1
 # batch size full
-#  10 fold rmse: [6.3247751670953996, 6.437308299349127, 6.461411003280964, 6.376642651324092, 6.5313922191266665, 6.256841653291637, 6.5418370056652595, 6.195540011486936, 6.456594647406477, 6.419185028637574]
-# mean rmse 6.4001528:
-# --- 11826.409373044968 seconds ---
-# almost 197 minute
+#  10 fold rmse: [6.243272135703298, 6.423126470022394, 6.558008600683642, 6.165165211489546, 6.425544377283033, 6.231552976782064, 6.522770538041589, 6.136061664176952, 6.429721021043391, 6.407842075416385]
+# mean rmse 6.3543065:
+# --- 15550.8682076931 seconds ---
+# almost 259 minute
 
 # batch size 32
-#  10 fold rmse: [6.065266400781681, 6.337295932230561, 6.453571886009377, 6.0592214626869945, 6.4299429081448265, 6.200226613487103, 6.487286385196409, 6.041064563433362, 6.257010838359452, 6.372317778360414]
-# mean rmse 6.2703205:
-# --- 14542.509479045868 seconds ---
+#  10 fold rmse: [6.101225195242071, 6.314328372665739, 6.3573477698253935, 6.018175570289074, 6.397347270041377, 6.080433541952865, 6.458474664269705, 5.998659937938255, 6.262033398695423, 6.325467528904762]
+# mean rmse 6.2313493:
+# --- 14567.663637161255 seconds ---
 # almost 242 minute
-'''
 
-'''
-dropout : 0.3
- 10 fold rmse: [6.117925178022915, 6.387345272213241, 6.574128520344119, 6.099691301883357, 6.448912642739211, 6.1736557335153375, 6.461242742373862, 6.091572064223081, 6.331646878756397, 6.412258400929658]
-mean rmse 6.3098379:
---- 5814.103994607925 seconds ---
-almost 96 minute
+# batch size 256
+#  10 fold rmse: [6.101225195242071, 6.314328372665739, 6.3573477698253935, 6.018175570289074, 6.397347270041377, 6.080433541952865, 6.458474664269705, 5.998659937938255, 6.262033398695423, 6.321040956745611]
+# mean rmse 6.2309067:
+# --- 7219.160327672958 seconds ---
+# almost 120 minute
 
-'''
-
-
-
-
-
-
+# dropout 0.3
+# batch size 32
+#  10 fold rmse: [6.084630784279836, 6.426276932819278, 6.4725625417552815, 6.059429531629137, 6.500645532097899, 6.183327549248772, 6.482397159300578, 6.120288827600537, 6.393060569845012, 6.52927671857867]
+# mean rmse 6.3251896:
+# --- 6693.668514251709 seconds ---
+# almost 111 minute
 
 '''
 model = Sequential()

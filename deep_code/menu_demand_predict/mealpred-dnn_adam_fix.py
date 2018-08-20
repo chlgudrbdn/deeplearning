@@ -106,8 +106,8 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
         edge_num += 1
     model.add(Dense(1))
     print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam')
-    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
+    # model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999))
 
     # 모델 저장 폴더 만들기
     MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
@@ -123,7 +123,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
                         callbacks=[checkpointer, early_stopping_callback], batch_size=32)
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title( scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2) )
     # 테스트 셋의 오차
     # y_rmse = history.history['rmse']
     # y_vrmse = history.history['val_rmse']
@@ -169,33 +169,18 @@ print("mean rmse %.7f:" % np.mean(rmse_Scores))
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
-'''
-dropout : 0.1
-# batch size full
-#  10 fold rmse: [6.3247751670953996, 6.437308299349127, 6.461411003280964, 6.376642651324092, 6.5313922191266665, 6.256841653291637, 6.5418370056652595, 6.195540011486936, 6.456594647406477, 6.419185028637574]
-# mean rmse 6.4001528:
-# --- 11826.409373044968 seconds ---
-# almost 197 minute
 
-# batch size 32
-#  10 fold rmse: [6.065266400781681, 6.337295932230561, 6.453571886009377, 6.0592214626869945, 6.4299429081448265, 6.200226613487103, 6.487286385196409, 6.041064563433362, 6.257010838359452, 6.372317778360414]
-# mean rmse 6.2703205:
-# --- 14542.509479045868 seconds ---
-# almost 242 minute
-'''
+# dropout 0.1
+#  10 fold rmse: [6.3754341127277305, 6.391986431427306, 6.732986767351186, 6.33667890959227, 6.7207062468206935, 6.352139642636234, 6.686741866160826, 6.180703485935455, 6.548986854529545, 6.584511599144433]
+# mean rmse 6.4910876:
+# --- 13511.712325811386 seconds ---
+# almost 225 minute
 
-'''
-dropout : 0.3
- 10 fold rmse: [6.117925178022915, 6.387345272213241, 6.574128520344119, 6.099691301883357, 6.448912642739211, 6.1736557335153375, 6.461242742373862, 6.091572064223081, 6.331646878756397, 6.412258400929658]
-mean rmse 6.3098379:
---- 5814.103994607925 seconds ---
-almost 96 minute
-
-'''
-
-
-
-
+# dropout 0.3
+#  10 fold rmse: [6.383061715797191, 6.685391673081672, 6.8370518065014805, 6.328243150903189, 6.762389504028825, 6.6248272567396524, 6.857060556826115, 6.371711032136563, 6.723502815668682, 6.8242645873532135]
+# mean rmse 6.6397504:
+# --- 6509.771930932999 seconds ---
+# almost 108 minute
 
 
 

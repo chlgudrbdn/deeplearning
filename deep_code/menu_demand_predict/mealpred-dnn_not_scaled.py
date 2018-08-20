@@ -9,7 +9,6 @@ from keras.layers import Conv1D, MaxPooling1D
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import KFold
-from keras.models import load_model
 from keras import backend as K
 import numpy as np
 import os, sys
@@ -18,16 +17,14 @@ import matplotlib.pyplot as plt
 import random as rn
 import pandas as pd
 from keras.optimizers import Adam
-from sklearn.metrics import mean_squared_error
-import math
 
 import time
 start_time = time.time()
 
-'''
+
 def rmse(y_true, y_pred):
     return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
-'''
+
 
 # fix random seed for reproducibility
 seed = 42
@@ -73,23 +70,21 @@ test_date_df = test_date_df.rename(columns={'식사명Encoddeded': '식사명'})
 Y = collection_values_float32[:, 0]
 X = collection_values_float32[:, 1:]
 
-scaler = MinMaxScaler(feature_range=(0, 1))
-X = scaler.fit_transform(X)
-X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
+# scaler = MinMaxScaler(feature_range=(0, 1))
+# X = scaler.fit_transform(X)
+X_test = test_date_df.values.astype('float32')
+# X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
 
 
 number_of_var = X.shape[1]
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 300
-patience_num = 200
+epochs = 3000
+patience_num = 1000
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
 rmse_Scores = []
-trainScoreList = []
-valScoreList = []
-
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
 for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
@@ -102,104 +97,70 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     edge_num = 2
     while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
         model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-        model.add(Dropout(0.3))
+        model.add(Dropout(0.1))
         edge_num += 1
     model.add(Dense(1))
     print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mse', optimizer='adam', metrics=[rmse])
     # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
 
     # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
+    # MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
+    # if not os.path.exists(MODEL_DIR):
+    #     os.mkdir(MODEL_DIR)
+    # modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
     # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
+    # checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
     # 학습 자동 중단 설정
+    # early_stopping_callback = EarlyStopping(monitor='val_acc', patience=patience_num)
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
     history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0,
-                        callbacks=[checkpointer, early_stopping_callback], batch_size=32)
+                        callbacks=[early_stopping_callback], batch_size=len(X_train))
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2))
+    plt.figure(figsize=(8, 8))
     # 테스트 셋의 오차
-    # y_rmse = history.history['rmse']
-    # y_vrmse = history.history['val_rmse']
+    y_rmse = history.history['rmse']
+    y_vrmse = history.history['val_rmse']
     y_loss = history.history['loss']
     y_vloss = history.history['val_loss']
     # 그래프로 표현
-    plt.ylim(0.0, 50.0)
     x_len = np.arange(len(y_loss))
-    # plt.plot(x_len, y_rmse, c="blue", label='y_rmse')
-    # plt.plot(x_len, y_vrmse, c="red", label='y_vrmse')
+    plt.plot(x_len, y_rmse, c="blue", label='y_rmse')
+    plt.plot(x_len, y_vrmse, c="red", label='y_vrmse')
     plt.plot(x_len, y_loss, c="green", label='loss')
     plt.plot(x_len, y_vloss, c="orange", label='val_loss')
 
     plt.legend(loc='upper left')
     plt.grid()
     plt.xlabel('epoch')
-    plt.ylabel('loss')
+    plt.ylabel('rmse')
     plt.show()
 
-    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-    file_list = [float(fileName[:-5]) for fileName in file_list]
-    file_list.sort()  # 만든날짜 정렬
-    model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
     evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-
-    # prediction_for_train = model.predict(X_train, batch_size=len(X_Validation))
-    # prediction_for_val = model.predict(X_Validation, batch_size=len(X_Validation))
-    # print(evalScore)
-    # trainScore = math.sqrt(mean_squared_error(Y_train, prediction_for_train[:, 0]))
-    # print('Train Score: %.9f RMSE' % trainScore)
-    # trainScoreList.append(trainScore)
-    # valScore = math.sqrt(mean_squared_error(Y_Validation, prediction_for_val[:, 0]))
-    # print('Val Score: %.9f RMSE' % valScore)
-
+    prediction_for_val = model.predict(X_Validation, batch_size=len(X_Validation))
+    # prediction_for_test = model.predict(X_Validation, batch_size=len(X_Validation))
     # print("predict : %s" % prediction_for_val)
     # print("real    : %s" % Y_Validation)
-    rmse_Scores.append(math.sqrt(evalScore))
+    rmse_Scores.append(evalScore[1])
 
 print("\n %d fold rmse: %s" % (n_fold, rmse_Scores))
-# accuracy = [float(j) for j in rmse_Scores]
-print("mean rmse %.7f:" % np.mean(rmse_Scores))
+accuracy = [float(j) for j in rmse_Scores]
+print("mean accuracy %.7f:" % np.mean(rmse_Scores))
 
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
-print("almost %d minute" % m)
-'''
-dropout : 0.1
-# batch size full
-#  10 fold rmse: [6.3247751670953996, 6.437308299349127, 6.461411003280964, 6.376642651324092, 6.5313922191266665, 6.256841653291637, 6.5418370056652595, 6.195540011486936, 6.456594647406477, 6.419185028637574]
-# mean rmse 6.4001528:
-# --- 11826.409373044968 seconds ---
-# almost 197 minute
+print("almost %2f minute" % m)
 
-# batch size 32
-#  10 fold rmse: [6.065266400781681, 6.337295932230561, 6.453571886009377, 6.0592214626869945, 6.4299429081448265, 6.200226613487103, 6.487286385196409, 6.041064563433362, 6.257010838359452, 6.372317778360414]
-# mean rmse 6.2703205:
-# --- 14542.509479045868 seconds ---
-# almost 242 minute
-'''
 
-'''
-dropout : 0.3
- 10 fold rmse: [6.117925178022915, 6.387345272213241, 6.574128520344119, 6.099691301883357, 6.448912642739211, 6.1736557335153375, 6.461242742373862, 6.091572064223081, 6.331646878756397, 6.412258400929658]
-mean rmse 6.3098379:
---- 5814.103994607925 seconds ---
-almost 96 minute
+# performance is not good. quite fast dropdown the val loss. but that's all
+#  10 fold rmse: [7.287564754486084, 7.238449573516846, 8.692784309387207, 7.904788017272949, 7.861262798309326, 7.4969611167907715, 7.824455738067627, 7.455782890319824, 7.606829643249512, 7.7877607345581055]
+# mean accuracy 7.7156640:
+# --- 10819.446436882019 seconds ---
+# almost 180.000000 minute
 
 '''
 
-
-
-
-
-
-
-'''
 model = Sequential()
 model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
 edge_num = 2
@@ -207,40 +168,17 @@ while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
     model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), activation='relu'))
     model.add(Dropout(0.1))
     edge_num += 1
-model.add(Dense(1))
-print("edge_num : %d" % edge_num)
-model.compile(loss='mse', optimizer='adam')
-# model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999)])
+model.add(Dense(1, activation='sigmoid'))
+# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])  
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['binary_accuracy'])  
+early_stopping_callback = EarlyStopping(monitor='val_binary_accuracy', patience=patience_num)
+history = model.fit(X, Y, validation_split=0.2, epochs=epochs, verbose=0, callbacks=[early_stopping_callback])
 
-# 모델 저장 폴더 만들기
-MODEL_DIR = './' + scriptName + ' model_loopNum' + str(len(rmse_Scores)).zfill(2) + '/'
-if not os.path.exists(MODEL_DIR):
-    os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
-# # 모델 업데이트 및 저장
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
-# 학습 자동 중단 설정
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-history = model.fit(X, Y, epochs=epochs, validation_split=0.1, verbose=0,
-                    callbacks=[checkpointer, early_stopping_callback], batch_size=len(X))
+prediction_for_test = np.where(model.predict(X_test.values) < 0.5, 0, 1)
+for timeAndDate, predic in X_test.index.values, prediction_for_test:
+    print("%s" % timeAndDate, ": %d" % predic)
+# X_test["prediction"] = prediction_for_test
+prediction_for_test_DF_DateGuWall = pd.DataFrame(data=prediction_for_test, index=X_test.index.values)
+prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWall.csv', encoding='utf-8')
 
-file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()  # 만든날짜 정렬
-model = load_model(MODEL_DIR + file_list[0])
-
-evalScore = model.evaluate(X, Y, batch_size=len(X))
-
-prediction_for_train = model.predict(X, batch_size=len(X))
-trainScore = math.sqrt(mean_squared_error(Y, prediction_for_train[:, 0]))
-print("evalScore", end=" ")
-print(evalScore)  # print(evalScore)로 확인 결과 loss, rmse. 앞에걸 sqrt하면 그냥 일일이 계산한 결과와 같은게 튀어나오는 것 같다.
-print('Train Score: %.9f RMSE' % trainScore)
-
-prediction_for_test = model.predict(X_test, batch_size=len(X_test))
-
-# for i in range(len(prediction_for_test)):
-#     print("date: %s" % test_date_df.index.values[i][0], "meal: %s" % test_date_df.index.values[i][1],
-#           "prediction: %.4f:" % prediction_for_test[i])
-prediction_for_meal_demand = pd.DataFrame(data=prediction_for_test, index=test_date_df.index)
-prediction_for_meal_demand.to_csv('prediction_for_test_dnn.csv', encoding='utf-8')
 '''

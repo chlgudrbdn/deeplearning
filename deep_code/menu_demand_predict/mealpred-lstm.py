@@ -39,6 +39,13 @@ def ordering_meal(mealList):
     return mealOrdered
 
 
+def meal_index_encode(df):
+    as_list = df['식사명'].tolist()
+    as_list = ordering_meal(as_list)
+    df['식사명'] = as_list
+    return df
+
+
 # fix random seed for reproducibility
 seed = 42
 os.environ['PYTHONHASHSEED'] = '0'
@@ -54,48 +61,57 @@ tf.global_variables_initializer()
 # load the dataset
 collection_df = pd.read_csv('collection_data_inner.csv', index_col=[0])
 collection_df_drop_menu = collection_df.drop(columns=['식사내용'])
+collection_df_drop_menu = meal_index_encode(collection_df_drop_menu)
 cols = collection_df_drop_menu.columns.tolist()
 cols = cols[1:] + cols[:1]
-collection_df_drop_menu = collection_df_drop_menu[cols]
+collection_df_drop_menu = collection_df_drop_menu[cols]  # 데이터 프레임에서 식사명 컬럼을 뒤로 미룸
+collection_df_drop_menu = collection_df_drop_menu.reset_index().set_index(['일자', '식사명'])
+collection_df_drop_menu.sort_index(inplace=True)
 
-collection_df_drop_menu_values = collection_df_drop_menu.values
-encoder = LabelEncoder()
-collection_df_drop_menu_values[:, -1] = encoder.fit_transform(collection_df_drop_menu_values[:, -1])  # 일단 아침, 점심, 저녁을 빼서 임의의 숫자로 만들어둠. 이걸 scaleing할지 고민해봐야한다.
-
-collection_values_float32 = collection_df_drop_menu_values.astype('float32')  # 0번 째 열은 아침점심 저녁 구분인데 이것도 X값으로 쳐야한다. 나중에 귀찮으니 뒤로 옮기자.
+# encoder = LabelEncoder()
+# collection_df_drop_menu_values[:, -1] = encoder.fit_transform(collection_df_drop_menu_values[:, -1])  # 일단 아침, 점심, 저녁을 빼서 임의의 숫자로 만들어둠. 이걸 scaleing할지 고민해봐야한다.
 
 test_date_df = pd.read_csv('forecast_date_and_meal_df.csv')
 test_date_df = test_date_df.drop(columns=['Unnamed: 0'])
-test_date_values = test_date_df.values
-encodded_test_date_df = pd.DataFrame(data=encoder.fit_transform(test_date_values[:, 1]), columns=['식사명Encoddeded'])
-test_date_df = test_date_df.join(encodded_test_date_df)
-test_date_df = test_date_df.set_index(['일자', '식사명'])
+test_date_df = meal_index_encode(test_date_df)  # 이 시점에서 컬럼은 일자, 식사명, 수량 이 있고 식사명을 인코딩.
+test_date_df_values = test_date_df.values
 
-test_date_df = pd.merge(test_date_df.reset_index(), collection_df_drop_menu.reset_index(),
-                           on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
+encodded_test_date_df = pd.DataFrame(data=list(test_date_df['식사명']), columns=['식사명Encoddeded'])
+test_date_df = test_date_df.join(encodded_test_date_df)
+
+test_date_df = pd.merge(test_date_df, collection_df_drop_menu.reset_index(),
+                        on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
 test_date_df = test_date_df.drop(columns=['수량_x', '수량_y'])
 cols = test_date_df.columns.tolist()
 cols = cols[1:] + cols[:1]
 test_date_df = test_date_df[cols]
 test_date_df = test_date_df.rename(columns={'식사명Encoddeded': '식사명'})
-# test_date_values = test_date_df.values
 
-Y = collection_df_drop_menu_values[:, 0]
+collection_df_drop_menu = collection_df_drop_menu.reset_index().set_index(['일자'])
+cols = collection_df_drop_menu.columns.tolist()
+cols = cols[1:] + cols[:1]
+collection_df_drop_menu = collection_df_drop_menu[cols]
+collection_df_drop_menu_values = collection_df_drop_menu.values  # 이 시점에서 index는 날짜 뿐이다. 식사명은 변수에 들어감.
+collection_values_float32 = collection_df_drop_menu_values.astype('float32')  # 0번 째 열은 아침점심 저녁 구분인데 이것도 X값으로 쳐야한다. 나중에 귀찮으니 뒤로 옮기자.
+
+Y = collection_df_drop_menu_values[:, 0]  # 별도로 안한다. 어차피 0~100사이 정규화 되어 있기도 하고.
 X = collection_df_drop_menu_values[:, 1:]
 
-# scaler = MinMaxScaler(feature_range=(0, 1))
-# X = scaler.fit_transform(X)
-# X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
-X_test = test_date_df.values
-
+scaler = MinMaxScaler(feature_range=(0, 1))
+X = scaler.fit_transform(X)
+# X_test = test_date_df.values
+X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
 
 number_of_var = X.shape[1]
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
 epochs = 200
 patience_num = 100
-n_fold = 10
-kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
+
+look_back = 4 * 8  # test date 날짜 차이가 최소 8일 정도 되는 것 같다. 공백을 생각하면 이정도가 적당하다.
+forecast_ahead = 4 * 3
+
+# kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
 rmse_Scores = []
 trainScoreList = []
@@ -219,8 +235,8 @@ print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %2f minute" % m)
 
-print("\n %d fold rmse: %s" % (n_fold, rmse_Scores))
-print("mean accuracy %.7f:" % np.mean(rmse_Scores))
+print("\nrmse: %s" % rmse_Scores)
+print("mean rmse %.7f:" % np.mean(rmse_Scores))
 
 
 """

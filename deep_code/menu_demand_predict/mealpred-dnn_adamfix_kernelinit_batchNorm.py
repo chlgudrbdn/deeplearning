@@ -20,6 +20,7 @@ import pandas as pd
 from keras.optimizers import Adam
 from sklearn.metrics import mean_squared_error
 import math
+from keras.layers.normalization import BatchNormalization
 
 import time
 start_time = time.time()
@@ -70,19 +71,21 @@ test_date_df = test_date_df[cols]
 test_date_df = test_date_df.rename(columns={'식사명Encoddeded': '식사명'})
 # test_date_values = test_date_df.values
 
+
 Y = collection_values_float32[:, 0]
 X = collection_values_float32[:, 1:]
 
-scaler = MinMaxScaler(feature_range=(0, 1))
-X = scaler.fit_transform(X)
-X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
+# scaler = MinMaxScaler(feature_range=(0, 1))
+# X = scaler.fit_transform(X)
+X_test = test_date_df.values.astype('float32')
+# X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
 
 
 number_of_var = X.shape[1]
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 300
-patience_num = 200
+epochs = 1
+patience_num = 1
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
@@ -98,16 +101,18 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     X_train, X_Validation = X[train_index], X[validation_index]
     Y_train, Y_Validation = Y[train_index], Y[validation_index]
     model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
+    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
     edge_num = 2
     while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-        model.add(Dropout(0.3))
+        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), kernel_initializer='random_normal'))
+        model.add(BatchNormalization())
+        model.add(Activation('relu'))
+        model.add(Dropout(0.1))
         edge_num += 1
     model.add(Dense(1))
     print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam')
-    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
+    # model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999))
 
     # 모델 저장 폴더 만들기
     MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
@@ -120,10 +125,10 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
     # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
     history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0,
-                        callbacks=[checkpointer, early_stopping_callback], batch_size=32)
+                        callbacks=[checkpointer, early_stopping_callback], batch_size=len(X_train))
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title( scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2) )
     # 테스트 셋의 오차
     # y_rmse = history.history['rmse']
     # y_vrmse = history.history['val_rmse']
@@ -146,12 +151,13 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
     file_list = [float(fileName[:-5]) for fileName in file_list]
     file_list.sort()  # 만든날짜 정렬
+    print('{0:.9f}'.format(file_list[0]) + ".hdf5")
     model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
     evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
 
     # prediction_for_train = model.predict(X_train, batch_size=len(X_Validation))
     # prediction_for_val = model.predict(X_Validation, batch_size=len(X_Validation))
-    # print(evalScore)
+    print(evalScore)
     # trainScore = math.sqrt(mean_squared_error(Y_train, prediction_for_train[:, 0]))
     # print('Train Score: %.9f RMSE' % trainScore)
     # trainScoreList.append(trainScore)
@@ -169,35 +175,10 @@ print("mean rmse %.7f:" % np.mean(rmse_Scores))
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
-'''
-dropout : 0.1
-# batch size full
-#  10 fold rmse: [6.3247751670953996, 6.437308299349127, 6.461411003280964, 6.376642651324092, 6.5313922191266665, 6.256841653291637, 6.5418370056652595, 6.195540011486936, 6.456594647406477, 6.419185028637574]
-# mean rmse 6.4001528:
-# --- 11826.409373044968 seconds ---
-# almost 197 minute
 
-# batch size 32
-#  10 fold rmse: [6.065266400781681, 6.337295932230561, 6.453571886009377, 6.0592214626869945, 6.4299429081448265, 6.200226613487103, 6.487286385196409, 6.041064563433362, 6.257010838359452, 6.372317778360414]
-# mean rmse 6.2703205:
-# --- 14542.509479045868 seconds ---
-# almost 242 minute
-'''
-
-'''
-dropout : 0.3
- 10 fold rmse: [6.117925178022915, 6.387345272213241, 6.574128520344119, 6.099691301883357, 6.448912642739211, 6.1736557335153375, 6.461242742373862, 6.091572064223081, 6.331646878756397, 6.412258400929658]
-mean rmse 6.3098379:
---- 5814.103994607925 seconds ---
-almost 96 minute
-
-'''
-
-
-
-
-
-
+# something is weird
+#  10 fold rmse: [1116.5401358661497, 1737.3149541749763, 1435.106790451498, 1118.2257151398371, 2639.2845621493716, 1626.0704935518631, 10.395394743469755, 10.9721198054388, 10.568633155470122, 11.414943444357954]
+# mean rmse 971.5893742:
 
 '''
 model = Sequential()

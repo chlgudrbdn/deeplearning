@@ -78,7 +78,7 @@ number_of_var = X.shape[1]
 first_layer_node_cnt = int(((number_of_var-22)*(number_of_var-23))/2)
 # first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 5000
+epochs = 10000
 patience_num = 2000
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
@@ -142,10 +142,24 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     file_list = [float(fileName[:-5]) for fileName in file_list]
     file_list.sort()  # 만든날짜 정렬
     model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
-    evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
+    evalScore = model.evaluate(X_Validation[:, 22:], Y_Validation, batch_size=len(X_Validation))
 
     rmse_Scores.append(math.sqrt(evalScore))
     prediction_for_val = model.predict(X_Validation[:, 22:], batch_size=len(X_Validation))
+
+    # almost 176.000000 minute
+    # 10 fold
+    # rmse: [10.503301192363285, 10.157301628246918, 10.671874642546664, 10.448867911750394, 10.691807642835084,
+    #        10.311134941614316, 10.589597715350155, 10.493750392602546, 10.504330423287415, 10.600698167372855]
+    # mean accuracy 10.4972665:
+    # almost
+    # 10000 epoch is enough
+
+
+
+
+
+
     '''
     text_anal_model = Sequential()
     text_anal_model.add(Embedding(3076, 22))  # Embedding층은 데이터 전처리 과정 통해 입력된 값을 받아 다음 층이 알아들을 수 있는 형태로 변환하는 역할. (불러온 단어의 총 개수, 기사당 단어 수). 1000가지 단어를 각 샘플마다 100개씩 feature로 갖고 있다.

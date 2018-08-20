@@ -98,16 +98,16 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     X_train, X_Validation = X[train_index], X[validation_index]
     Y_train, Y_Validation = Y[train_index], Y[validation_index]
     model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
+    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
     edge_num = 2
     while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
+        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu', kernel_initializer='random_normal'))
         model.add(Dropout(0.3))
         edge_num += 1
     model.add(Dense(1))
     print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam')
-    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
+    # model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999))
 
     # 모델 저장 폴더 만들기
     MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
@@ -169,34 +169,26 @@ print("mean rmse %.7f:" % np.mean(rmse_Scores))
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
-'''
-dropout : 0.1
+# dropout 0.1
 # batch size full
-#  10 fold rmse: [6.3247751670953996, 6.437308299349127, 6.461411003280964, 6.376642651324092, 6.5313922191266665, 6.256841653291637, 6.5418370056652595, 6.195540011486936, 6.456594647406477, 6.419185028637574]
-# mean rmse 6.4001528:
-# --- 11826.409373044968 seconds ---
-# almost 197 minute
+#  10 fold rmse: [6.259042530876453, 6.326940957901032, 6.565919112563344, 6.103884676342586, 6.510191923204194, 6.297881469560909, 6.481035002008986, 6.159633578016608, 6.405702446588393, 6.428094900725593]
+# mean rmse 6.3538327:
+# --- 16815.86440205574 seconds ---
+# almost 280 minute
 
 # batch size 32
-#  10 fold rmse: [6.065266400781681, 6.337295932230561, 6.453571886009377, 6.0592214626869945, 6.4299429081448265, 6.200226613487103, 6.487286385196409, 6.041064563433362, 6.257010838359452, 6.372317778360414]
-# mean rmse 6.2703205:
-# --- 14542.509479045868 seconds ---
-# almost 242 minute
-'''
-
-'''
-dropout : 0.3
- 10 fold rmse: [6.117925178022915, 6.387345272213241, 6.574128520344119, 6.099691301883357, 6.448912642739211, 6.1736557335153375, 6.461242742373862, 6.091572064223081, 6.331646878756397, 6.412258400929658]
-mean rmse 6.3098379:
---- 5814.103994607925 seconds ---
-almost 96 minute
-
-'''
+#  10 fold rmse: [6.259042530876453, 6.326940957901032, 6.522404718021112, 6.103884676342586, 6.391122215719985, 6.202022271907, 6.418633526986859, 6.159633578016608, 6.335837254042815, 6.428094900725593]
+# mean rmse 6.3147617:
+# --- 16745.699845075607 seconds ---
+# almost 279 minute
 
 
-
-
-
+# dropout 0.3
+# batch size 32
+#  10 fold rmse: [6.437731099841558, 6.705679453446388, 6.884424304482575, 6.463332409254496, 6.7568163892846655, 6.66884056251476, 6.901363525562386, 6.515456675452402, 6.618103468371162, 6.795237096112453]
+# mean rmse 6.6746985:
+# --- 5437.831305742264 seconds ---
+# almost 90 minute
 
 
 '''

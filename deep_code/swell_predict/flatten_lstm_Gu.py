@@ -19,15 +19,12 @@ import pandas as pd
 import numpy as np
 from math import sqrt
 from sklearn.metrics import mean_squared_error
+
 import time
 start_time = time.time()
 
 
-def weight_variable(shape, name=None):
-    return np.sqrt(0.01 / shape[0]) * np.random.normal(size=shape)
-
-
-# convert series to supervised learning
+# convert series to supervised learning  # data는 dataframe을 의미
 def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):  # n_out은 후행지표가 있을 수도 있다고 판단해서인거 같다.
     n_vars = 1 if type(data) is list else data.shape[1]
     df = pd.DataFrame(data)
@@ -70,6 +67,13 @@ def score_calculating(true_value, pred_value):
     return Score
 
 
+def divide_dateAndTime(df):
+    onlyDate = []
+    for dateAndtime in df.index.values.tolist():
+        onlyDate.append(dt.strptime(dateAndtime, '%Y-%m-%d %H:%M').strftime('%Y-%m-%d'))
+    # print(onlyDate[0])
+    return set(onlyDate)
+
 
 # fix random seed for reproducibility
 seed = 42
@@ -84,23 +88,29 @@ K.set_session(sess)
 tf.global_variables_initializer()
 
 test_dates_df = pd.read_csv('test_dates_times.csv', index_col=[1], skiprows=0)
-test_dates_df.sort_index(inplace=True)
+test_dates_df.sort_index(inplace=True)  # 테스트할 데이터.
 test_dates = test_dates_df.index.values.flatten().tolist()
+
 # 데이터 불러오기
 X_df = pd.read_csv('GuRyoungPo_hour.csv', index_col=[0])
-X_df.sort_index(inplace=True)
+X_df.sort_index(inplace=True)  # 데이터가 존재.
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
-test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 측정일자와 데이터세트가 겹치는 시간.
+test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 예측해야할 날짜에 자료가 있는 시간.
+
 abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
 abnormal_date.sort_index(inplace=True)
 abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
 abnormal_date = set(abnormal_date).intersection(X_df_index)
 
+abnormal_only_date = divide_dateAndTime(X_df.loc[abnormal_date])  # 시간 빼고 날짜만 추출
+
 swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
 swell_date.sort_index(inplace=True)
 swell_date = swell_date[swell_date['0'] == 1].index.values
 swell_date = set(swell_date).intersection(X_df_index)
+
+swell_only_date = divide_dateAndTime(X_df.loc[swell_date])  # 시간 빼고 날짜만 추출
 
 # normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
 normal_date = (X_df_index - swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
@@ -108,137 +118,60 @@ print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date),
 
 
 # 오버 샘플링 없이 모든 데이터 사용 : 그다지 예측력이 좋아진 느낌은 없다.
+# normal_date_X_df = X_df.loc[normal_date]  # 일단 제외.
+abnormal_date_X_df = X_df.loc[abnormal_date]  # 훈련에는 여기에 속한 날을 예측해야할 것이다.
+swell_date_X_df = X_df.loc[swell_date]  # 훈련에는 여기에 속한 날을 예측해야할 것이다.
 
-# normal_date_X_df = X_df.loc[normal_date]
-# abnormal_date_X_df = X_df.loc[abnormal_date]
-# swell_date_X_df = X_df.loc[swell_date]
-
-X_train_df = X_df.loc[X_df_index]
+X_train_df = X_df.loc[X_df_index]  # 일단 예측해야할 날짜의 데이터를 제외하고 가진 정보를 모두 발휘할 수 있는 범위
 X = X_train_df.values.astype('float32')
 # X_scaler = MinMaxScaler(feature_range=(0, 1))
 # X = X_scaler.fit_transform(X)
 
-X_test = X_df.loc[test_dates_in_X_df]
+X_test = X_df.loc[test_dates_in_X_df]  # test_dates_in_X_df는 X_df_index와 겹치지 않는 부분. test하기 위한 기간의 정보.
 
-Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)
-onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)
-Y_df.sort_index(inplace=True)
-Y_df = Y_df.loc[set(X_df.index.values)]
-# Y_df = Y_df.reindex(set(X_df.index.values))
-Y = Y_df.values
+Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])  # 모든 시간이 완벽하게 갖춰져있다. 그러나 test를 위한 날짜도 포함되어 있다는 것을 기억해야함.
+onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)  # 여기엔 아무 값도 없어야 한다.
+print(onlyXnotY)
+onlyYnotX = set(Y_df.index.values) - set(X_df.index.values)  # 구룡포가 못다루는 시간대.
+# print(len(onlyYnotX))
+Y_df.sort_index(inplace=True)  # 혹시 몰라 정렬
+Y_df_with_data = Y_df.loc[set(X_df.index.values)]  # 데이터가 있는 부분만 일단은 추출. test 하는 구간은 어차피 그걸 예측해야하니 생략
+Y = Y_df_with_data.values
 
-# 날씨가 비정상인날(swell제외) 전부 : swell이 일어나는 날. 대회에선 정상인 날자는 신경쓰지 않는다고 첫날에 가정. : 그다지 예측력이 좋아진 느낌은 없다.
-'''
-abnormal_date_X_df = X_df.loc[abnormal_date]
-swell_date_X_df = X_df.loc[swell_date]
-
-X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
-X = X_train_df.values.astype('float32')
-# X_scaler = MinMaxScaler(feature_range=(0, 1))
-# X = X_scaler.fit_transform(X)
-
-X_test = X_df.loc[test_dates_in_X_df]
-
-Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-Y_df = time_index_change_format(Y_df)
-Y_df.sort_index(inplace=True)
-Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values
-'''
-# 날씨가 비정상인날(swell제외) 1 : swell이 일어나는 날 1 비율로 오버 샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
-'''
-abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
-swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
-
-X_train_df = pd.concat([abnormal_date_X_df, swell_date_X_df])
-X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
-
-X_test = X_df.loc[test_dates_in_X_df]
-
-Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values
-'''
-# 날씨가 정상인날 1 : 날씨가 비정상인날(swell 제외) 1: swell이 일어나는 날 1 비율로 오버샘플링 : 그다지 예측력이 좋아진 느낌은 없다.
-'''
-normal_date_X_df = X_df.loc[normal_date].sample(len(swell_date))
-abnormal_date_X_df = X_df.loc[abnormal_date].sample(len(swell_date))
-swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
-
-X_train_df = pd.concat([normal_date_X_df, abnormal_date_X_df, swell_date_X_df])
-X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
-
-X_test = X_df.loc[test_dates_in_X_df]
-
-Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values
-'''
-# swell로만 학습 : 형편없다. 나중에 결과를 합치는데 써봐야할 것이다.
-'''
-swell_date_X_df = X_df.loc[swell_date].sample(len(swell_date))
-
-X_train_df = pd.concat([swell_date_X_df])
-X = X_train_df.values.astype('float32')
-X_scaler = MinMaxScaler(feature_range=(0, 1))
-X = X_scaler.fit_transform(X)
-X_test = X_df.loc[test_dates_in_X_df]
-
-Y_df = pd.read_csv('swell_Y.csv', index_col=[0])
-Y_train_df = Y_df.loc[set(X_train_df.index.values)]
-Y = Y_train_df.values  # 24시간 100101011... 같은 형태의 Y값
-'''
+# hyperParameter
 epochs = 300
 patience_num = 200
-n_hours = 3
+n_hours = 4  # 일단 예측해야하는 날 사이 최소 11일 정도 간격 차이가 있다. 44개의 데이터로 어떻게든 학습하던가 아니면 보간된 걸로 어떻게든 해본다던가.
 n_features = len(X_train_df.columns)  # 5
 
-values_df = pd.concat([X_df, Y_df], axis=1, join='inner')
+values_df = pd.concat([X_df, Y_df_with_data], axis=1, join='inner')  # 마지막에 Y값을 붙임. colum 명은 0이 됨.
 values_df.sort_index(inplace=True)
 values = values_df.astype('float32')
-scaler = MinMaxScaler(feature_range=(0, 1))
-scaled = scaler.fit_transform(values)
 
-'''
-# load dataset
-dataset = read_csv('pollution.csv', header=0, index_col=0)
-values = dataset.values
-# integer encode direction
-encoder = LabelEncoder()
-values[:,4] = encoder.fit_transform(values[:,4])
-# ensure all data is float
-values = values.astype('float32')
-# normalize features
 scaler = MinMaxScaler(feature_range=(0, 1))
 scaled = scaler.fit_transform(values)
-'''
 
 # frame as supervised learning
-reframed = series_to_supervised(scaled, n_hours, 1)
-reframed.drop(reframed.columns[-n_features: ], axis=1, inplace=True)
-# print("reframed.shape : %s" % reframed.shape)
-first_layer_node_cnt = int(reframed.shape[1]*(reframed.shape[1]-1)/2)
-# print("first_layer_node_cnt %d" % first_layer_node_cnt)
+reframed = series_to_supervised(scaled, n_hours, 1)  # t+1 같은 데이터는 별로 필요 없어서 1로 n_out 지정
+reframed.drop(reframed.columns[-n_features: ], axis=1, inplace=True)  # 예측해야하는건 이후의 모든 데이터가 아닌 1개의 데이터 뿐.
+first_layer_node_cnt = int(reframed.shape[1]*(reframed.shape[1]-1)/2)  # 완전 연결 가정한 edge
 
 # split into train and test sets
 values = reframed.values
-n_train_hours = 125 * 24  # 처음 예측해야하는 날짜 계산. test를 해보고 싶지만 일단 해본다. for루프로 swell이 발생한 날과 아닌날을 regex이용해서 호출해내는 방식으로 훈련일을 정해야할 것 같다.
+n_train_hours = (125 * 24) - n_hours  # 처음 예측해야하는 날짜 계산. test를 해보고 싶지만 일단 해본다. 나중에 for루프로 swell이 발생한 날과 아닌날을 regex이용해서 호출해내는 방식으로 훈련일을 정해야할 것 같다.
+# print(values_df.iloc[n_hours + n_train_hours, :].index.name)  # 아마도 n_hour만큼 누락되었을거라 추측. 아무튼 이쪽
+
 train = values[:n_train_hours, :]
-test = values[n_train_hours: n_train_hours+24, :]
+test = values[n_train_hours: n_train_hours+24, :]  # 24시간만 예측할 수 있는 모델이면 족하다.
 # split into input and outputs
-n_obs = n_hours * n_features
+# n_obs = n_hours * n_features  # swell 여부만 예측하면 그만이라 그다지 필요 없어 보인다.
 train_X, train_y = train[:, :-1], train[:, -1]
 test_X, test_y = test[:, :-1], test[:, -1]
 # print("train_X.shape, len(train_X), train_y.shape : %s" % train_X.shape, len(train_X), train_y.shape)
 # reshape input to be 3D [samples, timesteps, features]
 train_X = train_X.reshape((train_X.shape[0], n_hours, train_X.shape[1]))
 test_X = test_X.reshape((test_X.shape[0], n_hours, test_X.shape[1]))
-# print("train_X.shape, train_y.shape, test_X.shape, test_y.shape : %s" % train_X.shape, train_y.shape, test_X.shape, test_y.shape)
+print("train_X.shape, train_y.shape, test_X.shape, test_y.shape : %s" % train_X.shape, train_y.shape, test_X.shape, test_y.shape)
 
 # 빈 accuracy 배열
 accuracy = []

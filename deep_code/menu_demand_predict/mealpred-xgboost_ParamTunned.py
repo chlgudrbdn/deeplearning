@@ -92,7 +92,7 @@ model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 # evaluate predictions
 mse = mean_squared_error(y_test, y_pred)
-print("RMSE: %.9f%%" % (math.sqrt(mse)))
+print("RMSE: %.9f" % (math.sqrt(mse)))
 # print(model.feature_importances_)
 
 # important한 변수 추적
@@ -123,7 +123,7 @@ for thresh in thresholds:
     select_X_test = selection.transform(X_test)
     y_pred = selection_model.predict(select_X_test)
     mse = mean_squared_error(y_test, y_pred)
-    print("Thresh=%.3f, n=%d, mse: %.2f%% , " % (thresh, select_X_train.shape[1], mse))
+    print("Thresh=%.3f, n=%d, mse: %.2f , " % (thresh, select_X_train.shape[1], mse))
     rmse_Scores.append(math.sqrt(mse))
     # y_fore = selection_model.predict( X_forecast_df.iloc[list(var_sortby_featureImp[:select_X_train.shape[1]])].values )
     y_fore = selection_model.predict(selection.transform(X_fore))
