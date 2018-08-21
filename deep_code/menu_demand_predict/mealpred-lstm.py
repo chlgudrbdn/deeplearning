@@ -157,14 +157,14 @@ first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
 epochs = 50
 patience_num = 10
-look_back = 4 * 8  # test date 날짜 차이가 최소 8일 정도 되는 것 같다. 그런 공백을 생각하면 이정도가 그나마 적당하다.
+look_back = 4 * 8  # test date 날짜 차이가 최소 8일 정도 되는 것 같다. 공백과 공백 사이 최소 4일(점심2가 없는 날은 다행이 없으므로 16)
 forecast_ahead = 4 * 3  # 애초에 3일 뒤 것을 맞추는 문제다.
 ###################
 
 StartTrainDate = dt.strptime(str(20090803), '%Y%m%d').date() + timedelta(days=1)  # 20090803은 데이터 결락이 없는 마지막 날. 2010년 부터 추측해 제출하면 되므로 이게 더 좋을 것이다.
 test_only_date = test_date_df.index.levels[0].tolist()
 for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다.
-    EndTrainDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date() - timedelta(days=12)  # 2010-07-13 - 12 = 2010-07-01까지
+    EndTrainDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date() - timedelta(days=5)  # 2014-06-04 - 5 = 2010-05-30까지
     StartValidationDate = EndTrainDate + timedelta(days=1)  # 20100710
     EndValidationDate = StartValidationDate + timedelta(days=2)  # 20100712
     StartTestDate = EndValidationDate + timedelta(days=1)  # 20100713
@@ -323,3 +323,9 @@ print("almost %2f minute" % m)
 
 print("\nrmse: %s" % rmse_Scores)
 print("mean rmse %.7f:" % np.mean(rmse_Scores))
+
+
+
+
+
+
