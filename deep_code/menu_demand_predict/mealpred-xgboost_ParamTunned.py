@@ -141,3 +141,16 @@ print(result)
 print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %d minute" % m)
+
+# 별로 유망하지 못한 결과다. 애써봐야 9를 못넘음.
+# RMSE: 13.499226750%
+# Thresh=0.000, n=28, mse: 86.24% ,
+# Thresh=0.000, n=28, mse: 86.24% ,
+# Thresh=0.000, n=28, mse: 86.24% ,
+# Thresh=0.000, n=28, mse: 86.24% ,
+# Thresh=0.000, n=24, mse: 91.78% ,
+# Thresh=0.000, n=23, mse: 88.21% ,
+# Thresh=0.002, n=22, mse: 91.04% ,
+# Thresh=0.011, n=21, mse: 94.78% ,
+# Thresh=0.012, n=20, mse: 87.77% ,
+# Thresh=0.015, n=19, mse: 94.47% ,

@@ -10,6 +10,27 @@ from collections import OrderedDict, defaultdict
 from keras.preprocessing import sequence
 from collections import Counter
 from datetime import datetime as dt
+import sklearn.cluster
+import distance
+
+def edit_distance(s1, s2):  # 편집거리 구하기 코드. 출처 https://soooprmx.com/archives/6486
+    l1, l2 = len(s1), len(s2)
+    if l2 > l1:
+        return edit_distance(s2, s1)
+    if l2 is 0:
+        return l1
+    prev_row = list(range(l2 + 1))
+    current_row = [0] * (l2 + 1)
+    for i, c1 in enumerate(s1):
+        current_row[0] = i + 1
+        for j, c2 in enumerate(s2):
+            d_ins = current_row[j] + 1
+            d_del = prev_row[j + 1] + 1
+            d_sub = prev_row[j] + (1 if c1 != c2 else 0)
+            current_row[j + 1] = min(d_ins, d_del, d_sub)
+        prev_row[:] = current_row[:]
+    return prev_row[-1]
+
 
 menu_df = pd.read_csv('menu.csv', index_col=[1, 2])
 menu_df = menu_df.drop(columns=['Unnamed: 0'])
@@ -34,7 +55,7 @@ counts.most_common()
 Menu_list = list(menu_set)
 # Menu_list.sort()  # 일단 비슷한 것 끼리 숫자라도 가까우면 좋을 것 같다. 생각같아선 벡터를 쓰고 싶다.
 # 빈도 같은걸 기반으로 하거나.
-menu_dict = dict() # 메뉴별 빈도.
+menu_dict = dict()  # 메뉴별 빈도.
 for num in range(len(Menu_list)):
     # print("num : %d" % num ,"menu_dict : %s" % menu_dict)
     menu_dict[counts.most_common()[num][0]] = num + 1  # 0부터 시작해서
@@ -118,3 +139,22 @@ collection_data_inner = pd.merge(collection_data_inner.reset_index(), data_about
                                  on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
 
 collection_data_inner.to_csv("collection_data_inner.csv", encoding='utf-8')
+
+# https://stats.stackexchange.com/questions/123060/clustering-a-long-list-of-strings-words-into-similarity-groups
+'''
+words = np.asarray(Menu_list) #So that indexing with a list will work
+
+lev_similarity = -1*np.array([[distance.levenshtein(w1, w2) for w1 in words] for w2 in words])
+
+levenshtein_distance_menu_df = pd.DataFrame(data= lev_similarity, columns=Menu_list, index=Menu_list)
+levenshtein_distance_menu_df.to_csv("levenshtein_distance_menu.csv", encoding='utf-8')
+
+affprop = sklearn.cluster.AffinityPropagation(affinity="precomputed", damping=0.5)
+affprop.fit(lev_similarity)
+for cluster_id in np.unique(affprop.labels_):
+    print(" - *%s:* %s" % (exemplar, cluster_str))
+    exemplar = words[affprop.cluster_centers_indices_[cluster_id]]
+    cluster = np.unique(words[np.nonzero(affprop.labels_ == cluster_id)])
+    cluster_str = ", ".join(cluster)
+'''
+

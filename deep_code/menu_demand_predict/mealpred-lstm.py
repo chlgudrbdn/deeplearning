@@ -20,9 +20,45 @@ import pandas as pd
 from keras.optimizers import Adam
 from sklearn.metrics import mean_squared_error
 import math
+from datetime import datetime as dt
+from datetime import timedelta
+
 
 import time
 start_time = time.time()
+
+
+# convert series to supervised learning  # data는 dataframe을 의미
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):  # n_out은 후행지표가 있을 수도 있다고 판단해서인거 같다.
+    n_vars = 1 if type(data) is list else data.shape[1]
+    df = pd.DataFrame(data)
+    cols, names = list(), list()
+    # input sequence (t-n, ... t-1)
+    for i in range(n_in, 0, -1):
+        cols.append(df.shift(i))
+        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, n_out):
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+    # put it all together
+    agg = pd.concat(cols, axis=1)
+    agg.columns = names
+    # drop rows with NaN values
+    if dropnan:
+        agg.dropna(inplace=True)
+    return agg  # var1(t-1)...var8(t-1)   var1(t)...var8(t) 같은 형태로 출력됨.
+
+
+def create_dataset(dataset, look_back=1):
+    dataX, dataY = [], []
+    for i in range(len(dataset) - look_back):  # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프. 1을 빼야할 이유는 모르겠다.
+        dataX.append(dataset[i:(i + look_back), :-1])  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
+        dataY.append(dataset[i + look_back, -1])  # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
+    return np.array(dataX), np.array(dataY)  # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
 
 def ordering_meal(mealList):
@@ -46,6 +82,12 @@ def meal_index_encode(df):
     return df
 
 
+def changeDateToStr(date):
+    date = date.strftime('%Y%m%d')
+    # date = dt.strptime(date, '%Y-%m-%d').strftime('%Y%m%d')
+    return date
+
+
 # fix random seed for reproducibility
 seed = 42
 os.environ['PYTHONHASHSEED'] = '0'
@@ -67,14 +109,15 @@ cols = cols[1:] + cols[:1]
 collection_df_drop_menu = collection_df_drop_menu[cols]  # 데이터 프레임에서 식사명 컬럼을 뒤로 미룸
 collection_df_drop_menu = collection_df_drop_menu.reset_index().set_index(['일자', '식사명'])
 collection_df_drop_menu.sort_index(inplace=True)
+collection_df_drop_menu = collection_df_drop_menu.astype('float32')
 
-# encoder = LabelEncoder()
-# collection_df_drop_menu_values[:, -1] = encoder.fit_transform(collection_df_drop_menu_values[:, -1])  # 일단 아침, 점심, 저녁을 빼서 임의의 숫자로 만들어둠. 이걸 scaleing할지 고민해봐야한다.
-
-test_date_df = pd.read_csv('forecast_date_and_meal_df.csv')
+test_date_df = pd.read_csv('forecast_date_and_meal_df.csv')  # 바로 읽어들이면 아마 날짜-식사명 중복이 존재할 것이다. nan끼리 group by sum하면 0이 되버려서 미리 뺴뒀는데 이렇게 되버림. 여기서 중복제거를 할 수 밖에 없다.
 test_date_df = test_date_df.drop(columns=['Unnamed: 0'])
 test_date_df = meal_index_encode(test_date_df)  # 이 시점에서 컬럼은 일자, 식사명, 수량 이 있고 식사명을 인코딩.
-test_date_df_values = test_date_df.values
+test_date_df = test_date_df.set_index(['일자', '식사명'])
+test_date_df = test_date_df[~test_date_df.index.duplicated(keep='first')]
+test_date_df.sort_index(inplace=True)
+test_date_df = test_date_df.reset_index()
 
 encodded_test_date_df = pd.DataFrame(data=list(test_date_df['식사명']), columns=['식사명Encoddeded'])
 test_date_df = test_date_df.join(encodded_test_date_df)
@@ -86,40 +129,83 @@ cols = test_date_df.columns.tolist()
 cols = cols[1:] + cols[:1]
 test_date_df = test_date_df[cols]
 test_date_df = test_date_df.rename(columns={'식사명Encoddeded': '식사명'})
+test_date_df = test_date_df.astype('float32')
 
 collection_df_drop_menu = collection_df_drop_menu.reset_index().set_index(['일자'])
 cols = collection_df_drop_menu.columns.tolist()
 cols = cols[1:] + cols[:1]
 collection_df_drop_menu = collection_df_drop_menu[cols]
-collection_df_drop_menu_values = collection_df_drop_menu.values  # 이 시점에서 index는 날짜 뿐이다. 식사명은 변수에 들어감.
-collection_values_float32 = collection_df_drop_menu_values.astype('float32')  # 0번 째 열은 아침점심 저녁 구분인데 이것도 X값으로 쳐야한다. 나중에 귀찮으니 뒤로 옮기자.
-
-Y = collection_df_drop_menu_values[:, 0]  # 별도로 안한다. 어차피 0~100사이 정규화 되어 있기도 하고.
-X = collection_df_drop_menu_values[:, 1:]
 
 scaler = MinMaxScaler(feature_range=(0, 1))
-X = scaler.fit_transform(X)
-# X_test = test_date_df.values
-X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
+cols = collection_df_drop_menu.columns.tolist()
 
-number_of_var = X.shape[1]
-first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
-print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 200
-patience_num = 100
+TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values)
+TrainXdf = pd.DataFrame(data=TrainXdf_scaled, index=collection_df_drop_menu.index, columns=collection_df_drop_menu.columns)  # 최종적으로 사용.
 
-look_back = 4 * 8  # test date 날짜 차이가 최소 8일 정도 되는 것 같다. 공백을 생각하면 이정도가 적당하다.
-forecast_ahead = 4 * 3
+TestXdf_scaled = scaler.fit_transform(test_date_df.values)
+TestXdf = pd.DataFrame(data=TestXdf_scaled, index=test_date_df.index, columns=test_date_df.columns)  # 최종적으로 사용.
 
-# kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
+scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
 rmse_Scores = []
 trainScoreList = []
 valScoreList = []
 
-scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
+# hyper param
+number_of_var = len(cols) - 1
+first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
+print("first_layer_node_cnt %d" % first_layer_node_cnt)
+epochs = 50
+patience_num = 10
+look_back = 4 * 8  # test date 날짜 차이가 최소 8일 정도 되는 것 같다. 그런 공백을 생각하면 이정도가 그나마 적당하다.
+forecast_ahead = 4 * 3  # 애초에 3일 뒤 것을 맞추는 문제다.
+###################
+
+StartTrainDate = dt.strptime(str(20090803), '%Y%m%d').date() + timedelta(days=1)  # 20090803은 데이터 결락이 없는 마지막 날. 2010년 부터 추측해 제출하면 되므로 이게 더 좋을 것이다.
+test_only_date = test_date_df.index.levels[0].tolist()
+for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다.
+    EndTrainDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date() - timedelta(days=12)  # 2010-07-13 - 12 = 2010-07-01까지
+    StartValidationDate = EndTrainDate + timedelta(days=1)  # 20100710
+    EndValidationDate = StartValidationDate + timedelta(days=2)  # 20100712
+    StartTestDate = EndValidationDate + timedelta(days=1)  # 20100713
+    EndTestDate = StartTestDate + timedelta(days=2)  # 20100715
+
+    print("StartTrainDate : ", StartTrainDate)  # 20100713
+    print("EndTrainDate : ", EndTrainDate)
+    print("StartValidationDate : ", StartValidationDate)
+    print("EndValidationDate : ", EndValidationDate)
+    print("StartTestDate : ", StartTestDate)
+    print("EndTestDate : ", EndTestDate)
+
+    X_train = TrainXdf.loc[changeDateToStr(StartTrainDate):changeDateToStr(EndTrainDate)].values
+    # Y_train = X_train[:, -1]
+    X_train, y_train = create_dataset(X_train, look_back)
+
+    X_val = TrainXdf.loc[changeDateToStr(StartValidationDate):changeDateToStr(EndValidationDate)].values
+    Y_val = X_val[:, -1]
+
+    X_test_for_train = np.vstack([X_train, X_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
+    Y_test_for_train = np.vstack([Y_train, Y_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
 
 
+    X_test = TestXdf.loc[changeDateToStr(StartTestDate):changeDateToStr(EndTestDate)]  # 별도로 안한다. 어차피 0~100사이 정규화 되어 있기도 하고.
+    Y_test = []
+
+
+
+
+
+
+
+
+    train_X = train_X.reshape((train_X.shape[0], look_back, train_X.shape[2]))
+    test_X = test_X.reshape((test_X.shape[0], look_back, train_X.shape[2]))
+
+
+    if num != len(test_only_date) - 3: # 마지막 루프만 아니면
+        StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
+    m, s = divmod((time.time() - start_time), 60)
+    print("almost %d minute" % m)
 
 '''
 for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
@@ -231,130 +317,9 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
 
     '''
 
-print("--- %s seconds ---" % (time.time() - start_time))
+# print("--- %s seconds ---" % (time.time() - start_time))
 m, s = divmod((time.time() - start_time), 60)
 print("almost %2f minute" % m)
 
 print("\nrmse: %s" % rmse_Scores)
 print("mean rmse %.7f:" % np.mean(rmse_Scores))
-
-
-"""
-    model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
-    edge_num = 2
-    while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-        model.add(Dropout(0.1))
-        edge_num += 1
-    model.add(Dense(1))
-    print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam', metrics=[rmse])
-    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
-
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_rmse:.9f}.hdf5"
-    # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
-    # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_rmse', patience=patience_num)
-    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-    history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0,
-                        callbacks=[early_stopping_callback], batch_size=len(X_train))
-    # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
-
-    plt.figure(figsize=(8, 8))
-    # 테스트 셋의 오차
-    y_rmse = history.history['rmse']
-    y_vrmse = history.history['val_rmse']
-    y_loss = history.history['loss']
-    y_vloss = history.history['val_loss']
-    # 그래프로 표현
-    x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_rmse, c="blue", label='y_rmse')
-    plt.plot(x_len, y_vrmse, c="red", label='y_vrmse')
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
-    plt.ylabel('rmse')
-    plt.show()
-
-    evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-
-    prediction_for_train = model.predict(X_train, batch_size=len(X_Validation))
-    prediction_for_val = model.predict(X_Validation, batch_size=len(X_Validation))
-
-    trainScore = math.sqrt(mean_squared_error(Y_train, prediction_for_train[:, 0]))
-    print('Train Score: %.4f RMSE' % trainScore)
-    trainScoreList.append(trainScore)
-    valScore = math.sqrt(mean_squared_error(X_Validation, prediction_for_val[:, 0]))
-    print('Val Score: %.4f RMSE' % valScore)
-
-    # print("predict : %s" % prediction_for_val)
-    # print("real    : %s" % Y_Validation)
-    rmse_Scores.append(evalScore[1])
-
-    print("--- %s seconds ---" % (time.time() - start_time))
-    m, s = divmod((time.time() - start_time), 60)
-    print("almost %2f minute" % m)
-
-print("\n %d fold rmse: %s" % (n_fold, rmse_Scores))
-accuracy = [float(j) for j in rmse_Scores]
-print("mean accuracy %.7f:" % np.mean(rmse_Scores))
-
-
-
-model = Sequential()
-model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
-edge_num = 2
-while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
-    model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), activation='relu'))
-    model.add(Dropout(0.1))
-    edge_num += 1
-model.add(Dense(1))
-print("edge_num : %d" % edge_num)
-model.compile(loss='mse', optimizer='adam', metrics=[rmse])
-# model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
-
-# 모델 저장 폴더 만들기
-MODEL_DIR = './' + scriptName + ' model_loopNum' + str(len(rmse_Scores)).zfill(2) + '/'
-if not os.path.exists(MODEL_DIR):
-    os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
-# # 모델 업데이트 및 저장
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
-# 학습 자동 중단 설정
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-# early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-history = model.fit(X, Y, epochs=epochs, verbose=0, callbacks=[early_stopping_callback], batch_size=len(X))
-
-
-file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()
-for model_file in file_list:
-    print(model_file)
-    model = load_model(MODEL_DIR + model_file, custom_objects={'rmse': rmse})
-
-    trainPredict = model.predict(trainX, batch_size=1)
-    valPredict = model.predict(valX, batch_size=1)
-
-
-evalScore = model.evaluate(X, Y, batch_size=len(X))
-
-prediction_for_train = model.predict(X, batch_size=len(X))
-prediction_for_test = model.predict(X_test, batch_size=len(X_test))
-
-trainScore = math.sqrt(mean_squared_error(Y_train, prediction_for_train[:, 0]))
-print('Train Score: %.4f RMSE' % trainScore)
-
-for multi_index, predic in test_date_df.index.values, prediction_for_test:
-    print("%s" % multi_index, ": %d" % predic)
-prediction_for_meal_demand = pd.DataFrame(data=prediction_for_test, index=X_test.index.values)
-prediction_for_meal_demand.to_csv('prediction_for_test_dnn.csv', encoding='utf-8')
-"""
