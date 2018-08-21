@@ -49,6 +49,14 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):  # n_out은 후�
     return agg  # var1(t-1)...var8(t-1)   var1(t)...var8(t) 같은 형태로 출력됨.
 
 
+def create_dataset(dataset, look_back=1):
+    dataX, dataY = [], []
+    for i in range(len(dataset) - look_back):  # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프. 1을 빼야할 이유는 모르겠다.
+        dataX.append(dataset[i:(i + look_back), :-1])  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
+        dataY.append(dataset[i + look_back, -1])  # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
+    return np.array(dataX), np.array(dataY)  # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
+
+
 def score_calculating(true_value, pred_value):
     Score = 0
     for i in range(len(true_value)):
@@ -143,17 +151,21 @@ epochs = 300
 patience_num = 200
 n_hours = 4  # 일단 예측해야하는 날 사이 최소 11일 정도 간격 차이가 있다. 44개의 데이터로 어떻게든 학습하던가 아니면 보간된 걸로 어떻게든 해본다던가.
 n_features = len(X_train_df.columns)  # 5
-
-values_df = pd.concat([X_df, Y_df_with_data], axis=1, join='inner')  # 마지막에 Y값을 붙임. colum 명은 0이 됨.
-values_df.sort_index(inplace=True)
-values = values_df.astype('float32')
+###############
 
 scaler = MinMaxScaler(feature_range=(0, 1))
-scaled = scaler.fit_transform(values)
+scaled = scaler.fit_transform(X_df.values).astype('float32')
+X_df_scaled = pd.DataFrame(data=scaled, index=X_df.index, columns=X_df.columns)
+values_df = pd.concat([X_df_scaled, Y_df_with_data], axis=1, join='inner')  # 마지막에 Y값을 붙임. colum 명은 0이 됨.
+values_df_outer = pd.concat([X_df_scaled, Y_df], axis=1, join='outer')  # 마지막에 Y값을 붙임. colum 명은 0이 됨. 당연하지만 빈곳 투성이일것.
+# values = values_df.values
+
 
 # frame as supervised learning
-reframed = series_to_supervised(scaled, n_hours, 1)  # t+1 같은 데이터는 별로 필요 없어서 1로 n_out 지정
+reframed = series_to_supervised(values_df.values, n_hours, 1)  # t+1 같은 데이터는 별로 필요 없어서 1로 n_out 지정
+# reframed = series_to_supervised(scaled, n_hours, 1)  # t+1 같은 데이터는 별로 필요 없어서 1로 n_out 지정
 reframed.drop(reframed.columns[-n_features: ], axis=1, inplace=True)  # 예측해야하는건 이후의 모든 데이터가 아닌 1개의 데이터 뿐.
+
 first_layer_node_cnt = int(reframed.shape[1]*(reframed.shape[1]-1)/2)  # 완전 연결 가정한 edge
 
 # split into train and test sets
@@ -162,30 +174,68 @@ n_train_hours = (125 * 24) - n_hours  # 처음 예측해야하는 날짜 계산.
 # print(values_df.iloc[n_hours + n_train_hours, :].index.name)  # 아마도 n_hour만큼 누락되었을거라 추측. 아무튼 이쪽
 
 train = values[:n_train_hours, :]
-test = values[n_train_hours: n_train_hours+24, :]  # 24시간만 예측할 수 있는 모델이면 족하다.
+test = values[n_train_hours: , :]  # 24시간만 예측할 수 있는 모델이면 족하다.
 # split into input and outputs
 # n_obs = n_hours * n_features  # swell 여부만 예측하면 그만이라 그다지 필요 없어 보인다.
-train_X, train_y = train[:, :-1], train[:, -1]
-test_X, test_y = test[:, :-1], test[:, -1]
+
+# train_X, train_y = train[:, :-1], train[:, -1]
+# test_X, test_y = test[:, :-1], test[:, -1]
+train_X, train_y = create_dataset(train, n_hours)
+test_X, test_y = create_dataset(test, n_hours)
+
 # print("train_X.shape, len(train_X), train_y.shape : %s" % train_X.shape, len(train_X), train_y.shape)
 # reshape input to be 3D [samples, timesteps, features]
-train_X = train_X.reshape((train_X.shape[0], n_hours, train_X.shape[1]))
-test_X = test_X.reshape((test_X.shape[0], n_hours, test_X.shape[1]))
-print("train_X.shape, train_y.shape, test_X.shape, test_y.shape : %s" % train_X.shape, train_y.shape, test_X.shape, test_y.shape)
+train_X = train_X.reshape((train_X.shape[0], n_hours, train_X.shape[2]))
+test_X = test_X.reshape((test_X.shape[0], n_hours, test_X.shape[2]))
+print("train_X.shape : %s \ntrain_y.shape : %s \ntest_X.shape : %s \ntest_y.shape : %s" % (train_X.shape, train_y.shape, test_X.shape, test_y.shape))
 
 # 빈 accuracy 배열
 accuracy = []
 Scores = []
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
+
+for date in swell_only_date:
+    forecast_date = values_df_outer.filter(regex=date, axis=0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # design network
 model = Sequential()
-model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
+model.add(LSTM(first_layer_node_cnt, input_shape=(train_X.shape[1], train_X.shape[2])))
+# model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
 model.add(Dense(1, activation='sigmoid'))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 # fit network
-history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2,
-                    shuffle=False)
+history = model.fit(train_X, train_y, epochs=10, batch_size=72, validation_data=(test_X, test_y), verbose=2)
 # plot history
 plt.figure(figsize=(8, 8))
 # 테스트 셋의 오차
