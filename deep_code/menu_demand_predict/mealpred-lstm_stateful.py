@@ -1,56 +1,32 @@
 # -*- coding: utf-8 -*-
-from keras.preprocessing import sequence
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation
-from keras.layers import Embedding
-from keras.layers import LSTM
-from keras.callbacks import ModelCheckpoint,EarlyStopping
-from keras.layers import Conv1D, MaxPooling1D
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import KFold
-from keras import backend as K
-from keras.models import load_model
+
 import numpy as np
 import os, sys
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import random as rn
 import pandas as pd
-from keras.optimizers import Adam
+import keras
 from sklearn.metrics import mean_squared_error
 import math
 from datetime import datetime as dt
 from datetime import timedelta
-
+from keras.preprocessing import sequence
+from keras.models import Sequential
+from keras.optimizers import Adam
+from keras.layers import Dense, Dropout, Activation
+from keras.layers import Embedding
+from keras.layers import LSTM
+from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.layers import Conv1D, MaxPooling1D
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import KFold
+from keras import backend as K
+from keras.models import load_model
 
 import time
 start_time = time.time()
-
-
-# convert series to supervised learning  # data는 dataframe을 의미
-def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):  # n_out은 후행지표가 있을 수도 있다고 판단해서인거 같다.
-    n_vars = 1 if type(data) is list else data.shape[1]
-    df = pd.DataFrame(data)
-    cols, names = list(), list()
-    # input sequence (t-n, ... t-1)
-    for i in range(n_in, 0, -1):
-        cols.append(df.shift(i))
-        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
-    # forecast sequence (t, t+1, ... t+n)
-    for i in range(0, n_out):
-        cols.append(df.shift(-i))
-        if i == 0:
-            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
-        else:
-            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
-    # put it all together
-    agg = pd.concat(cols, axis=1)
-    agg.columns = names
-    # drop rows with NaN values
-    if dropnan:
-        agg.dropna(inplace=True)
-    return agg  # var1(t-1)...var8(t-1)   var1(t)...var8(t) 같은 형태로 출력됨.
 
 
 def create_dataset(dataset, look_back=1):
@@ -70,24 +46,14 @@ def difference(dataset, interval=1):
     return pd.Series(diff)
 
 
-# transform series into train and test sets for supervised learning
-def prepare_data(series, n_test, n_lag, n_seq):
-    # extract raw values
-    raw_values = series.values
-    # transform data to be stationary
-    diff_series = difference(raw_values, 1)
-    diff_values = diff_series.values
-    diff_values = diff_values.reshape(len(diff_values), 1)
-    # rescale values to -1, 1
-    scaler = MinMaxScaler(feature_range=(-1, 1))
-    scaled_values = scaler.fit_transform(diff_values)
-    scaled_values = scaled_values.reshape(len(scaled_values), 1)
-    # transform into supervised learning problem X, y
-    supervised = series_to_supervised(scaled_values, n_lag, n_seq)
-    supervised_values = supervised.values
-    # split into train and test sets
-    train, test = supervised_values[0:-n_test], supervised_values[-n_test:]
-    return scaler, train, test
+class CustomHistory(keras.callbacks.Callback):
+    def init(self):
+        self.train_loss = []
+        self.val_loss = []
+
+    def on_epoch_end(self, batch, logs={}):
+        self.train_loss.append(logs.get('loss'))
+        self.val_loss.append(logs.get('val_loss'))
 
 
 # fit an LSTM network to training data
@@ -183,11 +149,6 @@ def plot_forecasts(series, forecasts, n_test):
     plt.show()
 
 
-def get_absoulte_index(balnk_counta):
-
-    return
-
-
 def ordering_meal(mealList):
     mealOrdered = []
     for meal in mealList:
@@ -213,6 +174,15 @@ def changeDateToStr(date):
     date = date.strftime('%Y%m%d')
     # date = dt.strptime(date, '%Y-%m-%d').strftime('%Y%m%d')
     return date
+
+
+def gcd(a, b):
+    if a < b:
+        (a, b) = (b, a)
+    while b != 0:
+        (a, b) = (b, a % b)
+    return a
+# 출처: http://codepractice.tistory.com/65 [코딩 연습]
 
 
 # fix random seed for reproducibility
@@ -285,7 +255,8 @@ rmse_Scores = []
 number_of_var = len(cols) - 1
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 50
+# epochs = 50
+epochs = 2
 patience_num = 10
 look_back = 4 * 8  # test date 날짜 차이가 최소 8일(20140606과 20140529사이) 정도 되는 것 같다. 공백과 공백 사이로는 5일(점심2가 없는 날은 다행이 20110912 외엔 없으므로 20칸 정도차이)
 # 번거롭고 별로 예측력이 강해질 것 같지도 않으니 8일전 자료(예측 포함)를 기반으로 계산. # 아마 점심2가 없는 20110912, 20120930 때문에 결과값이 하나 더나와서 삐뚤어지는 결과가 생길것이다.
@@ -297,6 +268,7 @@ forecast_ahead = 1  # 예측하는 건 일단 바로 다음의 끼니(다소 애
 StartTrainDate = dt.strptime(str(20090803), '%Y%m%d').date() + timedelta(days=1)  # 20090803은 데이터 결락이 없는 마지막 날. 2010년 부터 추측해 제출하면 되므로 이게 더 좋을 것이다.
 test_only_date = test_date_df.index.levels[0].tolist()
 for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다.
+    print("----------------loop Num : ", num)
     # 최소 validation에 3일, tarin에 1일이라고 치면 가장 처음으로 빈칸이 생긴 날로부터 5일전이 최소로 필요. 물론 너무 적은 데이터라서 이 파트는 문제.
     # 일단 굴려보고 어떻게든 채워넣는 방법을 쓰는것도 나쁘진 않을 것 같다. 시간도 데이터도 부족하니 이 방법으로 간다.
     # dt.strptime(str(test_only_date[num]), '%Y%m%d').date()는 최초로 빈칸이 생기는 날짜. +2 하면 제출일자가 된다.
@@ -307,12 +279,7 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     StartTestDate = firstEmptyDate  # 20100713
     EndTestDate = StartTestDate + timedelta(days=2)  # 20100715
 
-    print("StartTrainDate : ", StartTrainDate)
-    print("EndTrainDate : ", EndTrainDate)
-    print("StartValidationDate : ", StartValidationDate)
-    print("EndValidationDate : ", EndValidationDate)
-    print("StartTestDate : ", StartTestDate)
-    print("EndTestDate : ", EndTestDate)
+
     '''
     # only for train
     X_train = TrainXdf.loc[changeDateToStr(StartTrainDate):changeDateToStr(EndTrainDate)].values  # list slice와 달리 : 뒤쪽 항도 포함된다.
@@ -344,51 +311,71 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
 
     X_val_df = TrainXdf.loc[changeDateToStr(StartValidationDate):changeDateToStr(EndValidationDate)]  # validation에 사용할 빈칸 이전의 3일관련 데이터.
     blankCounta = X_val_df.shape[0]
-    if blankCounta != 12:
-        print(X_val_df)
-    validation_start_area_absolute_position = TrainXdf.index.get_loc(changeDateToStr(StartValidationDate)).start
-    print("blankCounta : ", blankCounta)
-    print(validation_start_area_absolute_position)
+    # if blankCounta != 12:
+    #     print(X_val_df)
+    # validation_start_area_absolute_position = TrainXdf.index.get_loc(changeDateToStr(StartValidationDate)).start
+    # print("blankCounta : ", blankCounta)
+    # print(X_train.shape)
+    X_val = X_train[-look_back-blankCounta:, ]  # validation에 사용할 데이터 세트를 구축하기 위해 look_back 덧붙이기. 4*8 + 12
+    X_train = X_train[:-blankCounta, ]  # validation할때 사용할 데이터만 제외하고 훈련
 
-    X_val = X_train[validation_start_area_absolute_position-look_back:, ]
-    print(X_val.shape)
-    X_train = X_train[:validation_start_area_absolute_position-look_back, ]
+    print("StartTrainDate : ", StartTrainDate)
+    print("EndTrainDate : ", EndTrainDate)
     print(X_train.shape)
+    print("StartValidationDate : ", StartValidationDate)
+    print("EndValidationDate : ", EndValidationDate)
+    print(X_val.shape)
+    print("StartTestDate : ", StartTestDate)
+    print("EndTestDate : ", EndTestDate)
 
     X_train, y_train = create_dataset(X_train, look_back)
     X_val, y_val = create_dataset(X_val, look_back)
+    # reshape training into [samples, timesteps, features]
+    X_train = X_train.reshape(X_train.shape[0], look_back, X_train.shape[2])
+    X_val = X_val.reshape(X_val.shape[0], look_back, X_val.shape[2])
 
+    n_batch = gcd(X_train.shape[0], X_val.shape[0])  # 최대공약수로 해야 탈이 없다.
+    # design network
+    model = Sequential()
+    model.add(LSTM(first_layer_node_cnt, batch_input_shape=(n_batch, X_train.shape[1], X_train.shape[2]), stateful=True))
+    model.add(Dense(1))
+    model.compile(loss='mean_squared_error', optimizer='adam')
 
+    # 모델 저장 폴더 만들기
+    MODEL_DIR = './' + scriptName + ' model_loopNum' + str(num).zfill(2) + '/'
+    if not os.path.exists(MODEL_DIR):
+        os.mkdir(MODEL_DIR)
+    modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+    # # 모델 업데이트 및 저장
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
+    # 학습 자동 중단 설정
+    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
+    custom_hist = CustomHistory()
+    custom_hist.init()
+    # fit network # 에포크 2로 해서 14바퀴 돌리니까 93분정도 걸림. 다 돌려면 332분 정도 들텐데 이거에 50배면 276시간 든다.  시간부족. 단어는 무시하는 걸로 한정시키자. stateless로 한다던가 해야할듯.
+    for i in range(epochs):
+        model.fit(X_train, y_train, epochs=1, batch_size=n_batch, verbose=0, shuffle=False,
+                  validation_data=(X_val, y_val), callbacks=[custom_hist, checkpointer])
+        model.reset_states()
 
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(num).zfill(2))
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    x_len = np.arange(len(custom_hist.val_loss))
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+    plt.show()
 
-
-    '''
-    # configure
-    n_lag = 1
-    n_seq = 3
-    n_test = 10
-    n_epochs = 1500
-    n_batch = 1
-    n_neurons = 1
-    # prepare data
-    scaler, train, test = prepare_data(series, n_test, n_lag, n_seq)
-    
-    # fit model
-    model = fit_lstm(train, n_lag, n_seq, n_batch, n_epochs, n_neurons)
-    # make forecasts
-    forecasts = make_forecasts(model, n_batch, train, test, n_lag, n_seq)
-    # inverse transform forecasts and test
-    forecasts = inverse_transform(series, forecasts, scaler, n_test + 2)
-    actual = [row[n_lag:] for row in test]
-    actual = inverse_transform(series, actual, scaler, n_test + 2)
-    # evaluate forecasts
-    evaluate_forecasts(actual, forecasts, n_lag, n_seq)
-    # plot forecasts
-    plot_forecasts(series, forecasts, n_test + 2)
-    '''
+    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
+    file_list = [float(fileName[:-5]) for fileName in file_list]
+    file_list.sort()  # 만든날짜 정렬
+    model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
+    evalScore = model.evaluate(X_val, y_val, batch_size=n_batch)
 
     # if num != len(test_only_date) - 3: # 마지막 루프만 아니면
     #     StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
+    rmse_Scores.appen(evalScore)
     m, s = divmod((time.time() - start_time), 60)
     print("almost %d minute" % m)
 
