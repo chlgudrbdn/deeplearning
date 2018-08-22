@@ -105,7 +105,6 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
         model.add(Dropout(0.3))
         edge_num += 1
     model.add(Dense(1))
-    print("edge_num : %d" % edge_num)
     model.compile(loss='mse', optimizer='adam')
     # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
 
@@ -125,15 +124,11 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
 
     plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2) )
     # 테스트 셋의 오차
-    # y_rmse = history.history['rmse']
-    # y_vrmse = history.history['val_rmse']
     y_loss = history.history['loss']
     y_vloss = history.history['val_loss']
     # 그래프로 표현
     plt.ylim(0.0, 50.0)
     x_len = np.arange(len(y_loss))
-    # plt.plot(x_len, y_rmse, c="blue", label='y_rmse')
-    # plt.plot(x_len, y_vrmse, c="red", label='y_vrmse')
     plt.plot(x_len, y_loss, c="green", label='loss')
     plt.plot(x_len, y_vloss, c="orange", label='val_loss')
 
@@ -146,7 +141,9 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
     file_list = [float(fileName[:-5]) for fileName in file_list]
     file_list.sort()  # 만든날짜 정렬
+    print(file_list[0] + ".hdf5")
     model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
+
     evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
 
     # prediction_for_train = model.predict(X_train, batch_size=len(X_Validation))

@@ -57,44 +57,6 @@ sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
 K.set_session(sess)
 # manual_variable_initialization(True)
 tf.global_variables_initializer()
-'''
-# load the dataset
-collection_df = pd.read_csv('collection_data_inner.csv', index_col=[0])
-collection_df_drop_menu = collection_df.drop(columns=['식사내용'])
-cols = collection_df_drop_menu.columns.tolist()
-cols = cols[1:] + cols[:1]
-collection_df_drop_menu = collection_df_drop_menu[cols]
-
-collection_df_drop_menu_values = collection_df_drop_menu.values
-encoder = LabelEncoder()
-collection_df_drop_menu_values[:, -1] = encoder.fit_transform(collection_df_drop_menu_values[:, -1])  # 일단 아침, 점심, 저녁을 빼서 임의의 숫자로 만들어둠. 이걸 scaleing할지 고민해봐야한다.
-
-collection_values_float32 = collection_df_drop_menu_values.astype('float32')  # 0번 째 열은 아침점심 저녁 구분인데 이것도 X값으로 쳐야한다. 나중에 귀찮으니 뒤로 옮기자.
-
-test_date_df = pd.read_csv('forecast_date_and_meal_df.csv')
-test_date_df = test_date_df.drop(columns=['Unnamed: 0'])
-test_date_values = test_date_df.values
-encodded_test_date_df = pd.DataFrame(data=encoder.fit_transform(test_date_values[:, 1]), columns=['식사명Encoddeded'])
-test_date_df = test_date_df.join(encodded_test_date_df)
-test_date_df = test_date_df.set_index(['일자', '식사명'])
-
-test_date_df = pd.merge(test_date_df.reset_index(), collection_df_drop_menu.reset_index(),
-                           on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
-test_date_df = test_date_df.drop(columns=['수량_x', '수량_y'])
-cols = test_date_df.columns.tolist()
-cols = cols[1:] + cols[:1]
-test_date_df = test_date_df[cols]
-test_date_df = test_date_df.rename(columns={'식사명Encoddeded': '식사명'})
-# test_date_values = test_date_df.values
-
-Y = collection_df_drop_menu_values[:, 0]
-X = collection_df_drop_menu_values[:, 1:]
-
-# scaler = MinMaxScaler(feature_range=(0, 1))
-# X = scaler.fit_transform(X)
-# X_test = scaler.fit_transform(test_date_df.values.astype('float32'))
-X_test = test_date_df.values
-'''
 
 # load the dataset
 collection_df = pd.read_csv('collection_data_inner.csv', index_col=[0])
@@ -119,8 +81,8 @@ encodded_test_date_df = pd.DataFrame(data=list(test_date_df['식사명']), colum
 test_date_df = test_date_df.join(encodded_test_date_df)
 
 test_date_df = pd.merge(test_date_df.reset_index(), collection_df_drop_menu.reset_index(),
-                           on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
-test_date_df = test_date_df.drop(columns=['수량_x', '수량_y'])
+                        on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
+test_date_df = test_date_df.drop(columns=['수량_x', '수량_y', 'index'])
 cols = test_date_df.columns.tolist()
 cols = cols[1:] + cols[:1]
 test_date_df = test_date_df[cols]
@@ -135,24 +97,28 @@ collection_df_drop_menu = collection_df_drop_menu[cols]
 scaler = MinMaxScaler(feature_range=(0, 1))
 cols = collection_df_drop_menu.columns.tolist()
 
-TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values)
-TrainXdf = pd.DataFrame(data=TrainXdf_scaled, index=collection_df_drop_menu.index, columns=collection_df_drop_menu.columns)  # 최종적으로 사용.
+TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values[:, 1:])
+TrainXdf = pd.DataFrame(data=TrainXdf_scaled, index=collection_df_drop_menu.index, columns=collection_df_drop_menu.columns[1:])  # 최종적으로 사용.
+TrainYdf = pd.DataFrame(data=collection_df_drop_menu.values[:, 0], index=collection_df_drop_menu.index, columns=[collection_df_drop_menu.columns[0]])
 
 TestXdf_scaled = scaler.fit_transform(test_date_df.values)
 TestXdf = pd.DataFrame(data=TestXdf_scaled, index=test_date_df.index, columns=test_date_df.columns)  # 최종적으로 사용.
 
-X = TrainXdf.values[:, 1:]
-Y = TrainXdf.values[:, :1]
+X = TrainXdf.values
+Y = TrainYdf.values
 X_test = TestXdf.values
 
-number_of_var = X.shape[1]
+number_of_var = len(cols) - 1
 first_layer_node_cnt = int(((number_of_var-22)*(number_of_var-23))/2)
 # first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 2
-# epochs = 10000
-patience_num = 2
-# patience_num = 2000
+# epochs = 2
+epochs = 50000
+# LSTMepochs = 2
+LSTMepochs = 100
+# patience_num = 2
+patience_num = 2000
+
 n_fold = 10
 kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
@@ -184,7 +150,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999))
 
     # 모델 저장 폴더 만들기
-    MODEL_DIR = './' + scriptName + ' model_loopNum' + str(len(rmse_Scores)).zfill(2) + '/'
+    MODEL_DIR = './' + scriptName + ' DNNmodel_loopNum' + str(len(rmse_Scores)).zfill(2) + '/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
     modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
@@ -202,7 +168,6 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     y_loss = history.history['loss']
     y_vloss = history.history['val_loss']
     # 그래프로 표현
-    plt.ylim(0.0, 200.0)
     x_len = np.arange(len(y_loss))
     plt.plot(x_len, y_loss, c="green", label='loss')
     plt.plot(x_len, y_vloss, c="orange", label='val_loss')
@@ -247,21 +212,21 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     text_anal_model.compile(loss='mse', optimizer='adam')
 
     # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
+    MODEL_DIR = './'+scriptName+' LSTMmodel_loopNum'+str(len(textrmse_Scores)).zfill(2)+'/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
     modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
     # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
     # 학습 자동 중단 설정
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
 
-    text_anal_history = text_anal_model.fit(X_train[:, :22], Y_train, batch_size=32, verbose=0,
-                                            epochs=epochs, validation_data=(X_Validation[:, :22], Y_Validation))
+    text_anal_history = text_anal_model.fit(X_train[:, :22], Y_train, batch_size=32, verbose=2, callbacks=[checkpointer, early_stopping_callback],
+                                            epochs=LSTMepochs, validation_data=(X_Validation[:, :22], Y_Validation))
     # text_anal_history = text_anal_model.fit(X_train[:, :22], Y_train, batch_size=len(X_train), verbose=0,
     #                                         epochs=epochs, validation_data=(X_Validation[:, :22], Y_Validation))
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' lstmModel_loopNum'+str(len(rmse_Scores)).zfill(2) )
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' lstmModel_loopNum'+str(len(textrmse_Scores)).zfill(2) )
     y_loss = text_anal_history.history['loss']
     y_vloss = text_anal_history.history['val_loss']
     x_len = np.arange(len(y_loss))
@@ -296,20 +261,19 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
 
     blendmodel = Sequential()
     blendmodel.add(Dense(32, input_dim=2, activation='relu'))
-    edge_num = 2
     blendmodel.add(Dense(16, activation='relu'))
     blendmodel.add(Dense(8, activation='relu'))
-    blendmodel.add(Dense(4))
+    blendmodel.add(Dense(1))
     blendmodel.compile(loss='mse', optimizer='adam')
     # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999))
 
     # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' blendModel_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
+    MODEL_DIR = './'+scriptName+' blendModel_loopNum'+str(len(blendevalScore)).zfill(2)+'/'
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)
     modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
     # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
     # 학습 자동 중단 설정
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
     # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
@@ -318,7 +282,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
                                   callbacks=[checkpointer, early_stopping_callback], batch_size=32)
     # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
 
-    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' blendmodel_loopNum'+str(len(blendevalScore)).zfill(2))
     # 테스트 셋의 오차
     y_loss = blendhistory.history['loss']
     y_vloss = blendhistory.history['val_loss']
@@ -344,7 +308,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     prediction_for_train = blendmodel.predict(prediction_result_X_train.values, batch_size=len(prediction_result_X_train.values))
     prediction_for_val = blendmodel.predict(prediction_result_X_val.values, batch_size=len(prediction_result_X_val.values))
 
-    blendrmse_Scores.append(blendevalScore)
+    blendrmse_Scores.append(math.sqrt(blendevalScore))
 
     m, s = divmod((time.time() - start_time), 60)
     print("almost %2f minute" % m)
@@ -354,6 +318,8 @@ print("\n %d fold rmse : %s" % (n_fold, rmse_Scores))
 print("mean rmse : %.7f" % np.mean(rmse_Scores))
 print("\n %d fold textrmse: %s" % (n_fold, textrmse_Scores))
 print("mean textrmse : %.7f" % np.mean(textrmse_Scores))
+print("\n %d fold blendrmse: %s" % (n_fold, blendrmse_Scores))
+print("mean blendrmse : %.7f" % np.mean(blendrmse_Scores))
 
 """
     model = Sequential()

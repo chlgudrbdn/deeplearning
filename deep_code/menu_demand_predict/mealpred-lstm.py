@@ -61,6 +61,133 @@ def create_dataset(dataset, look_back=1):
     return np.array(dataX), np.array(dataY)  # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
 
+# create a differenced series
+def difference(dataset, interval=1):
+    diff = list()
+    for i in range(interval, len(dataset)):
+        value = dataset[i] - dataset[i - interval]
+        diff.append(value)
+    return pd.Series(diff)
+
+
+# transform series into train and test sets for supervised learning
+def prepare_data(series, n_test, n_lag, n_seq):
+    # extract raw values
+    raw_values = series.values
+    # transform data to be stationary
+    diff_series = difference(raw_values, 1)
+    diff_values = diff_series.values
+    diff_values = diff_values.reshape(len(diff_values), 1)
+    # rescale values to -1, 1
+    scaler = MinMaxScaler(feature_range=(-1, 1))
+    scaled_values = scaler.fit_transform(diff_values)
+    scaled_values = scaled_values.reshape(len(scaled_values), 1)
+    # transform into supervised learning problem X, y
+    supervised = series_to_supervised(scaled_values, n_lag, n_seq)
+    supervised_values = supervised.values
+    # split into train and test sets
+    train, test = supervised_values[0:-n_test], supervised_values[-n_test:]
+    return scaler, train, test
+
+
+# fit an LSTM network to training data
+def fit_lstm(train, n_lag, n_seq, n_batch, nb_epoch, n_neurons):
+    # reshape training into [samples, timesteps, features]
+    X, y = train[:, 0:n_lag], train[:, n_lag:]
+    X = X.reshape(X.shape[0], 1, X.shape[1])
+    # design network
+    model = Sequential()
+    model.add(LSTM(n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]), stateful=True))
+    model.add(Dense(y.shape[1]))
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    # fit network
+    for i in range(nb_epoch):
+        model.fit(X, y, epochs=1, batch_size=n_batch, verbose=0, shuffle=False)
+        model.reset_states()
+    return model
+
+
+# make one forecast with an LSTM,
+def forecast_lstm(model, X, n_batch):
+    # reshape input pattern to [samples, timesteps, features]
+    X = X.reshape(1, 1, len(X))
+    # make forecast
+    forecast = model.predict(X, batch_size=n_batch)
+    # convert to array
+    return [x for x in forecast[0, :]]
+
+
+# evaluate the persistence model
+def make_forecasts(model, n_batch, train, test, n_lag, n_seq):
+    forecasts = list()
+    for i in range(len(test)):
+        X, y = test[i, 0:n_lag], test[i, n_lag:]
+        # make forecast
+        forecast = forecast_lstm(model, X, n_batch)
+        # store the forecast
+        forecasts.append(forecast)
+    return forecasts
+
+
+# invert differenced forecast
+def inverse_difference(last_ob, forecast):
+    # invert first forecast
+    inverted = list()
+    inverted.append(forecast[0] + last_ob)
+    # propagate difference forecast using inverted first value
+    for i in range(1, len(forecast)):
+        inverted.append(forecast[i] + inverted[i - 1])
+    return inverted
+
+
+# inverse data transform on forecasts
+def inverse_transform(series, forecasts, scaler, n_test):
+    inverted = list()
+    for i in range(len(forecasts)):
+        # create array from forecast
+        forecast = np.array(forecasts[i])
+        forecast = forecast.reshape(1, len(forecast))
+        # invert scaling
+        inv_scale = scaler.inverse_transform(forecast)
+        inv_scale = inv_scale[0, :]
+        # invert differencing
+        index = len(series) - n_test + i - 1
+        last_ob = series.values[index]
+        inv_diff = inverse_difference(last_ob, inv_scale)
+        # store
+        inverted.append(inv_diff)
+    return inverted
+
+
+# evaluate the RMSE for each forecast time step
+def evaluate_forecasts(test, forecasts, n_lag, n_seq):
+    for i in range(n_seq):
+        actual = [row[i] for row in test]
+        predicted = [forecast[i] for forecast in forecasts]
+        rmse = math.sqrt(mean_squared_error(actual, predicted))
+        print('t+%d RMSE: %f' % ((i + 1), rmse))
+
+
+# plot the forecasts in the context of the original dataset
+def plot_forecasts(series, forecasts, n_test):
+    # plot the entire dataset in blue
+    plt.plot(series.values)
+    # plot the forecasts in red
+    for i in range(len(forecasts)):
+        off_s = len(series) - n_test + i - 1
+        off_e = off_s + len(forecasts[i]) + 1
+        xaxis = [x for x in range(off_s, off_e)]
+        yaxis = [series.values[off_s]] + forecasts[i]
+        plt.plot(xaxis, yaxis, color='red')
+    # show the plot
+    plt.show()
+
+
+def get_absoulte_index(balnk_counta):
+
+    return
+
+
 def ordering_meal(mealList):
     mealOrdered = []
     for meal in mealList:
@@ -124,6 +251,8 @@ test_date_df = test_date_df.join(encodded_test_date_df)
 
 test_date_df = pd.merge(test_date_df, collection_df_drop_menu.reset_index(),
                         on=['일자', '식사명'], how='inner').set_index(['일자', '식사명'])
+outer_join_df = pd.merge(test_date_df, collection_df_drop_menu.reset_index(),
+                        on=['일자', '식사명'], how='outer').set_index(['일자', '식사명'])
 test_date_df = test_date_df.drop(columns=['수량_x', '수량_y'])
 cols = test_date_df.columns.tolist()
 cols = cols[1:] + cols[:1]
@@ -139,17 +268,18 @@ collection_df_drop_menu = collection_df_drop_menu[cols]
 scaler = MinMaxScaler(feature_range=(0, 1))
 cols = collection_df_drop_menu.columns.tolist()
 
-TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values)
-TrainXdf = pd.DataFrame(data=TrainXdf_scaled, index=collection_df_drop_menu.index, columns=collection_df_drop_menu.columns)  # 최종적으로 사용.
-
+TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values[:, 1:])  # 뗏다 붙여서 normalization을 X에만 적용
+mealDemand = collection_df_drop_menu.values[:, 0].reshape((-1, 1))
+TrainXdf_scaled = np.concatenate((TrainXdf_scaled, mealDemand), axis=1)
+TrainXdf = pd.DataFrame(data=TrainXdf_scaled, index=collection_df_drop_menu.index, columns=cols[1:] + cols[:1])  # 최종적으로 사용.
+# TrainYdf = pd.DataFrame(data=collection_df_drop_menu.values[:, 0], index=collection_df_drop_menu.index, columns=[collection_df_drop_menu.columns[0]])
+# Y값은 TrainXdf 0열에 있다. create dataset 함수 때문에 이렇게 한다.
 TestXdf_scaled = scaler.fit_transform(test_date_df.values)
 TestXdf = pd.DataFrame(data=TestXdf_scaled, index=test_date_df.index, columns=test_date_df.columns)  # 최종적으로 사용.
 
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
 rmse_Scores = []
-trainScoreList = []
-valScoreList = []
 
 # hyper param
 number_of_var = len(cols) - 1
@@ -157,172 +287,113 @@ first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 print("first_layer_node_cnt %d" % first_layer_node_cnt)
 epochs = 50
 patience_num = 10
-look_back = 4 * 8  # test date 날짜 차이가 최소 8일 정도 되는 것 같다. 공백과 공백 사이 최소 4일(점심2가 없는 날은 다행이 없으므로 16)
-forecast_ahead = 4 * 3  # 애초에 3일 뒤 것을 맞추는 문제다.
+look_back = 4 * 8  # test date 날짜 차이가 최소 8일(20140606과 20140529사이) 정도 되는 것 같다. 공백과 공백 사이로는 5일(점심2가 없는 날은 다행이 20110912 외엔 없으므로 20칸 정도차이)
+# 번거롭고 별로 예측력이 강해질 것 같지도 않으니 8일전 자료(예측 포함)를 기반으로 계산. # 아마 점심2가 없는 20110912, 20120930 때문에 결과값이 하나 더나와서 삐뚤어지는 결과가 생길것이다.
+forecast_ahead = 1  # 예측하는 건 일단 바로 다음의 끼니(다소 애매하지만 점심식사2는 특별.)
+# forecast_ahead = 4 * 3  # 애초에 3일 뒤 것을 맞추는 문제다.
+
 ###################
 
 StartTrainDate = dt.strptime(str(20090803), '%Y%m%d').date() + timedelta(days=1)  # 20090803은 데이터 결락이 없는 마지막 날. 2010년 부터 추측해 제출하면 되므로 이게 더 좋을 것이다.
 test_only_date = test_date_df.index.levels[0].tolist()
 for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다.
-    EndTrainDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date() - timedelta(days=5)  # 2014-06-04 - 5 = 2010-05-30까지
-    StartValidationDate = EndTrainDate + timedelta(days=1)  # 20100710
-    EndValidationDate = StartValidationDate + timedelta(days=2)  # 20100712
-    StartTestDate = EndValidationDate + timedelta(days=1)  # 20100713
+    # 최소 validation에 3일, tarin에 1일이라고 치면 가장 처음으로 빈칸이 생긴 날로부터 5일전이 최소로 필요. 물론 너무 적은 데이터라서 이 파트는 문제.
+    # 일단 굴려보고 어떻게든 채워넣는 방법을 쓰는것도 나쁘진 않을 것 같다. 시간도 데이터도 부족하니 이 방법으로 간다.
+    # dt.strptime(str(test_only_date[num]), '%Y%m%d').date()는 최초로 빈칸이 생기는 날짜. +2 하면 제출일자가 된다.
+    firstEmptyDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date()
+    EndTrainDate = firstEmptyDate - timedelta(days=4)  # 20100709 # 2014-06-04 - 4 = 2010-05-30까지
+    StartValidationDate = firstEmptyDate - timedelta(days=3)  # 20100710  # 20100705. 3일을 예측해야하지만 그전에 8일정도의 데이터를 기반으로 추측해서 RMSE를 추측할 예정.
+    EndValidationDate = firstEmptyDate - timedelta(days=1)  # 20100712 : 20100705와는 8일차이.
+    StartTestDate = firstEmptyDate  # 20100713
     EndTestDate = StartTestDate + timedelta(days=2)  # 20100715
 
-    print("StartTrainDate : ", StartTrainDate)  # 20100713
+    print("StartTrainDate : ", StartTrainDate)
     print("EndTrainDate : ", EndTrainDate)
     print("StartValidationDate : ", StartValidationDate)
     print("EndValidationDate : ", EndValidationDate)
     print("StartTestDate : ", StartTestDate)
     print("EndTestDate : ", EndTestDate)
-
-    X_train = TrainXdf.loc[changeDateToStr(StartTrainDate):changeDateToStr(EndTrainDate)].values
-    # Y_train = X_train[:, -1]
+    '''
+    # only for train
+    X_train = TrainXdf.loc[changeDateToStr(StartTrainDate):changeDateToStr(EndTrainDate)].values  # list slice와 달리 : 뒤쪽 항도 포함된다.
     X_train, y_train = create_dataset(X_train, look_back)
 
+    # only for validation
     X_val = TrainXdf.loc[changeDateToStr(StartValidationDate):changeDateToStr(EndValidationDate)].values
-    Y_val = X_val[:, -1]
+    # print(X_val)
+    X_val, y_val = create_dataset(X_val, look_back)
 
-    X_test_for_train = np.vstack([X_train, X_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
-    Y_test_for_train = np.vstack([Y_train, Y_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
+    if changeDateToStr(firstEmptyDate) == str(20110912) or  changeDateToStr(firstEmptyDate) == str(20120930):
+        X_val = np.delete(X_val, 2, 0)  # 원래대로라면 점심2가 와야할 차례지만 없으므로 아예 빼버리던가 해야할 것이다.
+        Y_val = np.delete(Y_val, 2, 0)  # 원래대로라면 점심2가 와야할 차례지만 없으므로 아예 빼버리던가 해야할 것이다.
+    elif changeDateToStr(firstEmptyDate) == str(20171008):
+    # only for forecast with rolling
+    # X_test_for_train = np.vstack([X_train, X_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
+    # Y_test_for_train = np.vstack([Y_train, Y_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
+    X_test = TestXdf.loc[int(changeDateToStr(StartTestDate)):int(changeDateToStr(EndTestDate))].values  # 별도로 안한다. 어차피 0~100사이 정규화 되어 있기도 하고.
+    # X_test_for_train = create_dataset_only_train(X_test_for_train)
+
+    # print(X_train.shape)
+    # print(y_train.shape)
+    print(X_val.shape)
+    print(y_val.shape)
+    print(X_test.shape)
+    '''
+    X_train_df = TrainXdf.loc[changeDateToStr(StartTrainDate):changeDateToStr(EndValidationDate)]  # list slice와 달리 : 뒤쪽 항도 포함된다. # 일단 validataion 데이터도 같이 부른다.
+    X_train = X_train_df.values
+
+    X_val_df = TrainXdf.loc[changeDateToStr(StartValidationDate):changeDateToStr(EndValidationDate)]  # validation에 사용할 빈칸 이전의 3일관련 데이터.
+    blankCounta = X_val_df.shape[0]
+    if blankCounta != 12:
+        print(X_val_df)
+    validation_start_area_absolute_position = TrainXdf.index.get_loc(changeDateToStr(StartValidationDate)).start
+    print("blankCounta : ", blankCounta)
+    print(validation_start_area_absolute_position)
+
+    X_val = X_train[validation_start_area_absolute_position-look_back:, ]
+    print(X_val.shape)
+    X_train = X_train[:validation_start_area_absolute_position-look_back, ]
+    print(X_train.shape)
+
+    X_train, y_train = create_dataset(X_train, look_back)
+    X_val, y_val = create_dataset(X_val, look_back)
 
 
-    X_test = TestXdf.loc[changeDateToStr(StartTestDate):changeDateToStr(EndTestDate)]  # 별도로 안한다. 어차피 0~100사이 정규화 되어 있기도 하고.
-    Y_test = []
 
 
 
+    '''
+    # configure
+    n_lag = 1
+    n_seq = 3
+    n_test = 10
+    n_epochs = 1500
+    n_batch = 1
+    n_neurons = 1
+    # prepare data
+    scaler, train, test = prepare_data(series, n_test, n_lag, n_seq)
+    
+    # fit model
+    model = fit_lstm(train, n_lag, n_seq, n_batch, n_epochs, n_neurons)
+    # make forecasts
+    forecasts = make_forecasts(model, n_batch, train, test, n_lag, n_seq)
+    # inverse transform forecasts and test
+    forecasts = inverse_transform(series, forecasts, scaler, n_test + 2)
+    actual = [row[n_lag:] for row in test]
+    actual = inverse_transform(series, actual, scaler, n_test + 2)
+    # evaluate forecasts
+    evaluate_forecasts(actual, forecasts, n_lag, n_seq)
+    # plot forecasts
+    plot_forecasts(series, forecasts, n_test + 2)
+    '''
 
-
-
-
-
-    train_X = train_X.reshape((train_X.shape[0], look_back, train_X.shape[2]))
-    test_X = test_X.reshape((test_X.shape[0], look_back, train_X.shape[2]))
-
-
-    if num != len(test_only_date) - 3: # 마지막 루프만 아니면
-        StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
+    # if num != len(test_only_date) - 3: # 마지막 루프만 아니면
+    #     StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
     m, s = divmod((time.time() - start_time), 60)
     print("almost %d minute" % m)
 
-'''
-for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
-    print("loop num : ", len(rmse_Scores)+1)
-    # print("TRAIN: %d" % len(train_index), "TEST: %d" % len(validation_index))
-    X_train, X_Validation = X[train_index], X[validation_index]
-    Y_train, Y_Validation = Y[train_index], Y[validation_index]
-
-    model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu'))
-    edge_num = 2
-    while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), activation='relu'))
-        model.add(Dropout(0.1))
-        edge_num += 1
-    model.add(Dense(1))
-    print("edge_num : %d" % edge_num)
-    model.compile(loss='mse', optimizer='adam', metrics=[rmse])
-    # model.compile(loss='mse', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=[rmse])
-
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './' + scriptName + ' model_loopNum' + str(len(rmse_Scores)).zfill(2) + '/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR + "{val_rmse:.9f}.hdf5"
-    # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_rmse', verbose=2, save_best_only=True)
-    # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_rmse', patience=patience_num)
-    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-    history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0,
-                        callbacks=[early_stopping_callback], batch_size=len(X_train))
-    # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
-
-    plt.figure(figsize=(8, 8))
-    # 테스트 셋의 오차
-    y_rmse = history.history['rmse']
-    y_vrmse = history.history['val_rmse']
-    y_loss = history.history['loss']
-    y_vloss = history.history['val_loss']
-    # 그래프로 표현
-    x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_rmse, c="blue", label='y_rmse')
-    plt.plot(x_len, y_vrmse, c="red", label='y_vrmse')
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
-    plt.ylabel('rmse')
-    plt.show()
-
-    evalScore = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-
-    prediction_for_train = model.predict(X_train, batch_size=len(X_Validation))
-    prediction_for_val = model.predict(X_Validation, batch_size=len(X_Validation))
-
-    trainScore = math.sqrt(mean_squared_error(Y_train, prediction_for_train[:, 0]))
-    print('Train Score: %.4f RMSE' % trainScore)
-    trainScoreList.append(trainScore)
-    valScore = math.sqrt(mean_squared_error(X_Validation, prediction_for_val[:, 0]))
-    print('Val Score: %.4f RMSE' % valScore)
-
-    # print("predict : %s" % prediction_for_val)
-    # print("real    : %s" % Y_Validation)
-    rmse_Scores.append(evalScore[1])
-    '''
-
-'''
-    text_anal_model = Sequential()
-    text_anal_model.add(Embedding(3076, 22))  # Embedding층은 데이터 전처리 과정 통해 입력된 값을 받아 다음 층이 알아들을 수 있는 형태로 변환하는 역할. (불러온 단어의 총 개수, 기사당 단어 수). 1000가지 단어를 각 샘플마다 100개씩 feature로 갖고 있다.
-    text_anal_model.add(LSTM(11*21, activation='relu'))
-    # text_anal_model.add(Conv1D(64, 5, padding='valid', activation='relu', strides=1))  # MNIST_Deep 에선 2차원 행렬 합성곱을 했지만 이경우는 1차원.
-    # text_anal_model.add(MaxPooling1D(pool_size=4))
-    # padding: 바깥에 0을 채워넣냐 마냐.. "valid" 는 패딩 없단 소리. "same" 인풋과 같은 길이의 패딩 0 붙임(길이 조절은 불가). 결과적으로 출력 이미지 사이즈가 입력과 동일. "causal" 확대한 합성곱의 결과. 모델이 시간 순서를 위반해서는 안되는 시간 데이터를 모델링 할 때 유용.
-    # strides는 다음칸을 움직이는 칸수 정도로 보면 된다. 2이고 왼쪽에서 오른쪽 2칸 움직이고 다음 행으로 갈 땐 2칸 아래로 가는 식.
-    text_anal_model.add(Dense(1, activation='relu'))  # RNN은 여러 상황에서 쓰일수 있는데 다수 입력 단일 출력, 단일 입력 다수 출력도 가능(사진의 여러 요소를 추출해 캡션 만들 때 사용). 이건 후자. 다수입력 다수 출력도 가능.
-    text_anal_model.compile(loss='mse', optimizer='adam')
-
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-    # # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=2, save_best_only=True)
-    # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-
-    text_anal_history = text_anal_model.fit(X_train[:, :22], Y_train, batch_size=len(X_train), verbose=0,
-                                            epochs=epochs, validation_data=(X_Validation[:, :22], Y_Validation))
-
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(len(rmse_Scores)).zfill(2) )
-    y_loss = text_anal_history.history['loss']
-    y_vloss = text_anal_history.history['val_loss']
-    x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.show()
-
-    evalScore = text_anal_model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-    rmse_Scores.append(evalScore)
-
-    '''
-
-# print("--- %s seconds ---" % (time.time() - start_time))
-m, s = divmod((time.time() - start_time), 60)
-print("almost %2f minute" % m)
-
-print("\nrmse: %s" % rmse_Scores)
-print("mean rmse %.7f:" % np.mean(rmse_Scores))
+# print("\nrmse: %s" % rmse_Scores)
+# print("mean rmse %.7f:" % np.mean(rmse_Scores))
 
 
 
