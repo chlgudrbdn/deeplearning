@@ -109,22 +109,12 @@ def inverse_difference(last_ob, forecast):
 
 
 # inverse data transform on forecasts
-def inverse_transform(series, forecasts, scaler, n_test):
-    inverted = list()
-    for i in range(len(forecasts)):
-        # create array from forecast
-        forecast = np.array(forecasts[i])
-        forecast = forecast.reshape(1, len(forecast))
-        # invert scaling
-        inv_scale = scaler.inverse_transform(forecast)
-        inv_scale = inv_scale[0, :]
-        # invert differencing
-        index = len(series) - n_test + i - 1
-        last_ob = series.values[index]
-        inv_diff = inverse_difference(last_ob, inv_scale)
-        # store
-        inverted.append(inv_diff)
-    return inverted
+def search_best_model(MODEL_DIR):
+    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
+    file_list = [float(fileName[:-5]) for fileName in file_list]
+    file_list.sort()  # 만든날짜 정렬
+    model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
+    return model
 
 
 # evaluate the RMSE for each forecast time step
@@ -370,17 +360,18 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     # plt.xlabel('epoch')
     # plt.legend(['train', 'val'], loc='upper left')
     # plt.show()
-
-    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-    file_list = [float(fileName[:-5]) for fileName in file_list]
-    file_list.sort()  # 만든날짜 정렬
     del model
-    model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
+    model = search_best_model(MODEL_DIR)
     evalScore = model.evaluate(X_val, y_val, batch_size=len(X_val))
     rmse_Scores.append(math.sqrt(evalScore))
 
     # 생각 같아선 추가된 데이터(validation 파트)를 포함해서 좀 더 훈련시켜두고 싶지만 마땅히 validation할 데이터가 없어 과적합 되기 십상. 그냥 이 모델 써서 예상해본다.
-    # 나중에 시간이 된다고 치면 추가한다.
+    model.fit(X_val, y_val, epochs=epochs, verbose=0, validation_data=(X_train, y_train),
+              # shuffle=False,
+              batch_size=len(X_train),
+              callbacks=[early_stopping_callback, checkpointer])
+    del model
+    model = search_best_model(MODEL_DIR)
 
     X_test_df = TestXdf.loc[int(changeDateToStr(StartTestDate)):int(changeDateToStr(EndTestDate))]
     X_test = X_test_df.values
@@ -393,7 +384,10 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
         prediction = model.predict(x_hat, batch_size=1)
         # prediction = model.predict(np.array([x_hat]), batch_size=1)
         testPredict[k] = prediction
-        x_hat = np.vstack([X_test[k], prediction])
+        # new_x_hat = np.vstack([X_test[k, 0], prediction])
+        new_x_hat = np.vstack([np.reshape(X_test[k], (1,-1)), prediction])
+        x_hat = np.asarray([np.vstack([x_hat[1:], new_x_hat])])
+        print(x_hat.shape)
         TrainXdf.iloc[test_start_area_absolute_position + k, -1] = prediction
     
 
