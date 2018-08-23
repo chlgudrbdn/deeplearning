@@ -32,7 +32,7 @@ start_time = time.time()
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
     for i in range(len(dataset) - look_back):  # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프. 1을 빼야할 이유는 모르겠다.
-        dataX.append(dataset[i:(i + look_back), :-1])  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
+        dataX.append(dataset[i:(i + look_back), ])  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
         dataY.append(dataset[i + look_back, -1])  # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return np.array(dataX), np.array(dataY)  # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
@@ -249,24 +249,25 @@ rmse_Scores = []
 
 # hyper param
 number_of_var = len(cols) - 1
-first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
-print("first_layer_node_cnt %d" % first_layer_node_cnt)
-# epochs = 50
+# first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
+# print("first_layer_node_cnt %d" % first_layer_node_cnt)
+# epochs = 100
 epochs = 2
+# patience_num = 30
 patience_num = 2
 look_back = 4 * 8  # test date 날짜 차이가 최소 8일(20140606과 20140529사이) 정도 되는 것 같다. 공백과 공백 사이로는 5일(점심2가 없는 날은 다행이 20110912 외엔 없으므로 20칸 정도차이)
 # 번거롭고 별로 예측력이 강해질 것 같지도 않으니 8일전 자료(예측 포함)를 기반으로 계산. # 아마 점심2가 없는 20110912, 20120930 때문에 결과값이 하나 더나와서 삐뚤어지는 결과가 생길것이다.
 forecast_ahead = 1  # 예측하는 건 일단 바로 다음의 끼니(다소 애매하지만 점심식사2는 특별.)
 # forecast_ahead = 4 * 3  # 애초에 3일 뒤 것을 맞추는 문제다.
-
+forecast_satck = []
 ###################
 
 StartTrainDate = dt.strptime(str(20090803), '%Y%m%d').date() + timedelta(days=1)  # 20090803은 데이터 결락이 없는 마지막 날. 2010년 부터 추측해 제출하면 되므로 이게 더 좋을 것이다.
 test_only_date = test_date_df.index.levels[0].tolist()
 for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다.
-    print("----------------loop Num : ", num)
+    print("----------------loop Num : ", num/3)
     # 최소 validation에 3일, tarin에 1일이라고 치면 가장 처음으로 빈칸이 생긴 날로부터 5일전이 최소로 필요. 물론 너무 적은 데이터라서 이 파트는 문제.
-    # 일단 굴려보고 어떻게든 채워넣는 방법을 쓰는것도 나쁘진 않을 것 같다. 시간도 데이터도 부족하니 이 방법으로 간다.
+    # 일단 굴려보고 어떻게든 채워넣는 방법을 쓰는것도 나쁘진 않을 것 같다. !시간도 데이터도 부족하니 이 방법으로 간다.!
     # dt.strptime(str(test_only_date[num]), '%Y%m%d').date()는 최초로 빈칸이 생기는 날짜. +2 하면 제출일자가 된다.
     firstEmptyDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date()
     EndTrainDate = firstEmptyDate - timedelta(days=4)  # 20100709 # 2014-06-04 - 4 = 2010-05-30까지
@@ -305,7 +306,8 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     # X_train = X_train_df.values[:, 22:]
 
     X_val_df = TrainXdf.loc[int(changeDateToStr(StartValidationDate)):int(changeDateToStr(EndValidationDate))]  # validation에 사용할 빈칸 이전의 3일관련 데이터.
-    blankCounta = X_val_df.shape[0]
+    X_test_df = TestXdf.loc[int(changeDateToStr(StartTestDate)):int(changeDateToStr(EndTestDate))]
+    blankCounta = X_test_df.shape[0]
     # if blankCounta != 12:
     #     print(X_val_df)
 
@@ -331,7 +333,7 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
 
     # n_batch = gcd(X_train.shape[0], X_val.shape[0])  # 일단 배치사이즈를 대충 결정.
     model = Sequential()
-    model.add(LSTM(first_layer_node_cnt, input_shape=(X_train.shape[1], X_train.shape[2])))
+    model.add(LSTM(number_of_var, input_shape=(X_train.shape[1], X_train.shape[2])))
     model.add(Dropout(0.1))
     model.add(Activation('relu'))
     model.add(Dense(1))
@@ -373,7 +375,6 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     del model
     model = search_best_model(MODEL_DIR)
 
-    X_test_df = TestXdf.loc[int(changeDateToStr(StartTestDate)):int(changeDateToStr(EndTestDate))]
     X_test = X_test_df.values
 
     x_hat = X_train[-1:, ]  # 끄트머리에서 다른 변수들로 계산.
@@ -384,13 +385,13 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
         prediction = model.predict(x_hat, batch_size=1)
         # prediction = model.predict(np.array([x_hat]), batch_size=1)
         testPredict[k] = prediction
-        # new_x_hat = np.vstack([X_test[k, 0], prediction])
-        new_x_hat = np.vstack([np.reshape(X_test[k], (1,-1)), prediction])
-        x_hat = np.asarray([np.vstack([x_hat[1:], new_x_hat])])
-        print(x_hat.shape)
+        # new_x_hat = np.append([X_test[k, ], prediction])
+        new_x_hat = np.vstack([np.reshape(X_test[k], (-1, 1)), prediction])
+        x_hat = np.asarray([np.vstack([x_hat[0][1:], np.reshape(new_x_hat, (1, -1))])])
+        # print(x_hat.shape)
         TrainXdf.iloc[test_start_area_absolute_position + k, -1] = prediction
-    
 
+    forecast_satck.extend(testPredict)
     # if num != len(test_only_date) - 3: # 마지막 루프만 아니면
     #     StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
     m, s = divmod((time.time() - start_time), 60)
@@ -399,6 +400,16 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
 print("\n about  rmse: %s" % rmse_Scores)
 print("mean rmse %.7f:" % np.mean(rmse_Scores))
 
+onlyDateInTest_df = list(set(list(test_date_df.index.levels[0])))
+onlyDateInTest_df.sort()
+onlyDateInTest_df = [onlyDateInTest_df[date_idx] for date_idx in range(2, len(onlyDateInTest_df), 3)]
+prediction_for_meal_demand = pd.DataFrame(data=forecast_satck, index=test_date_df.index)
+prediction_for_meal_demand = prediction_for_meal_demand.loc[onlyDateInTest_df]
+
+prediction_for_meal_demand = prediction_for_meal_demand.values.reshape((-1, 4))
+
+prediction_for_meal_demand_df = pd.DataFrame(data=prediction_for_meal_demand, index=onlyDateInTest_df, columns=['아침식사', '점심식사', '점심식사2', '저녁식사'])
+prediction_for_meal_demand_df.to_csv(scriptName +' prediction.csv', encoding='utf-8')
 """
 
 """
