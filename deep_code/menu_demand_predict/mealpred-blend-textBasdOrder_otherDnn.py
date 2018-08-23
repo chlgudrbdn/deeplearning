@@ -311,7 +311,7 @@ for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 
     blendrmse_Scores.append(math.sqrt(blendevalScore))
 
     m, s = divmod((time.time() - start_time), 60)
-    print("almost %2f minute" % m)
+    print("almost %d minute" % m)
 
 
 print("\n %d fold rmse : %s" % (n_fold, rmse_Scores))
