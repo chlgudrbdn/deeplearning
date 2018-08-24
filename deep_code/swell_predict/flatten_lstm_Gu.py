@@ -52,7 +52,7 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):  # n_out은 후�
 def create_dataset(dataset, look_back=1):
     dataX, dataY = [], []
     for i in range(len(dataset) - look_back):  # 1이면 그냥 처음부터 끝의 한칸 전까지. 그 이상이면 . range(5)면 0~4 . 1031개 샘플 가진 데이터라면 look_back이 30일때 range가 1000. 즉 0~999=1000번 루프. 1을 빼야할 이유는 모르겠다.
-        dataX.append(dataset[i:(i + look_back), :-1])  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
+        dataX.append(dataset[i:(i + look_back), ])  # 1이면 2개씩 dataX에 추가. i가 0이면 0~1까지.
         dataY.append(dataset[i + look_back, -1])  # i 가 0이면 1 하나만. X와 비교하면 2대 1 대응이 되는셈.
     return np.array(dataX), np.array(dataY)  # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
@@ -95,7 +95,8 @@ K.set_session(sess)
 # manual_variable_initialization(True)
 tf.global_variables_initializer()
 
-test_dates_df = pd.read_csv('test_dates_times.csv', index_col=[1], skiprows=0)
+test_dates_df = pd.read_csv('test_dates_times.csv', index_col=[1], skiprows=0)  # 확인결과 중복있다.
+test_dates_df = test_dates_df[~test_dates_df.index.duplicated(keep='first')]
 test_dates_df.sort_index(inplace=True)  # 테스트할 데이터.
 test_dates = test_dates_df.index.values.flatten().tolist()
 
@@ -194,7 +195,7 @@ accuracy = []
 Scores = []
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 
-
+"""
 for date in swell_only_date:
     forecast_date = values_df_outer.filter(regex=date, axis=0)
 
@@ -267,157 +268,4 @@ inv_y = inv_y[:, 0]
 # rmse = sqrt(mean_squared_error(inv_y, inv_yhat))
 score = score_calculating(inv_y, inv_yhat)
 print('Test score: %.3f' % score)
-""""""
-
-'''
-# 모델의 설정, 컴파일, 실행
-for train_index, validation_index in kf.split(X):  # 이하 모델을 학습한 뒤 테스트.
-    print("loop num : ", len(accuracy)+1)
-    print("TRAIN: %d" % len(train_index), "TEST: %d" % len(validation_index))
-
-    X_train, X_Validation = X[train_index], X[validation_index]
-    Y_train, Y_Validation = Y[train_index], Y[validation_index]
-    model = Sequential()
-    model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
-    edge_num = 2
-    # model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-    while int(first_layer_node_cnt * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), kernel_initializer='random_normal'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        # model.add(Dropout(0.1))
-        edge_num += 1
-    model.add(Dense(1, activation='sigmoid'))
-    print("edge_num : %d" % edge_num)
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']) # 판단근거 https://www.dlology.com/blog/how-to-choose-last-layer-activation-and-loss-function/
-    model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=['accuracy'])  # 판단근거 https://www.dlology.com/blog/how-to-choose-last-layer-activation-and-loss-function/
-
-    # 모델 저장 폴더 만들기
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-    # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
-    # 학습 자동 중단 설정
-    # early_stopping_callback = EarlyStopping(monitor='val_acc', patience=patience_num)
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-
-    history = model.fit(X_train, Y_train, validation_data=(X_Validation, Y_Validation), epochs=epochs, verbose=0, batch_size=len(X_train),
-                        callbacks=[early_stopping_callback, checkpointer])
-    # history = model.fit(X_train, Y_train, validation_split=0.2, epochs=10, verbose=2, callbacks=[early_stopping_callback, checkpointer])
-
-    plt.figure(figsize=(8, 8))
-    # 테스트 셋의 오차
-    # y_acc = history.history['binary_accuracy']
-    y_acc = history.history['acc']
-    # y_vacc = history.history['val_binary_accuracy']
-    y_vacc = history.history['val_acc']
-    y_loss = history.history['loss']
-    y_vloss = history.history['val_loss']
-    # 그래프로 표현
-    x_len = np.arange(len(y_loss))
-    # plt.plot(x_len, y_acc, c="blue", label='binary_accuracy')
-    plt.plot(x_len, y_acc, c="blue", label='acc')
-    # plt.plot(x_len, y_vacc, c="red", label='val_binary_accuracy')
-    plt.plot(x_len, y_vacc, c="red", label='val_acc')
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    # 그래프에 그리드를 주고 레이블을 표시
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
-    plt.ylabel('acc')
-    plt.show()
-
-    file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-    file_list.sort()
-    print(file_list[0])
-    model = load_model(MODEL_DIR + file_list[0])
-
-    Score = model.evaluate(X_Validation, Y_Validation, batch_size=len(X_Validation))
-    k_accuracy = "%.4f" % (Score[1])
-    prediction_for_test = np.where(model.predict(X_Validation) < 0.5, 0, 1)
-    print(prediction_for_test.sum())
-    # print("predict : %s" % prediction_for_test)
-    # print("real    : %s" % Y_Validation)
-    Scores.append(score_calculating(Y_Validation, prediction_for_test))
-    print("\nscore guess : %d" % score_calculating(Y_Validation, prediction_for_test))
-    accuracy.append(k_accuracy)
-
-print("\n %.f fold accuracy:" % n_fold, accuracy)
-accuracy = [float(j) for j in accuracy]
-print("mean accuracy %.7f:" % np.mean(accuracy))
-print("score : %s" % Scores)
-print("mean score : %.4f" % np.mean(Scores))
-
-print("--- %s seconds ---" % (time.time() - start_time))
-m, s = divmod((time.time() - start_time), 60)
-print("almost %2f minute" % m)
-
-
-model = Sequential()
-model.add(Dense(first_layer_node_cnt, input_dim=number_of_var, activation='relu', kernel_initializer='random_normal'))
-edge_num = 2
-# model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-while int(first_layer_node_cnt * (edge_num ** (-2))) >= 5 and edge_num < 6:
-    model.add(Dense(int(first_layer_node_cnt * (edge_num ** (-2))), kernel_initializer='random_normal'))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    # model.add(Dropout(0.1))
-    edge_num += 1
-model.add(Dense(1, activation='sigmoid'))
-model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.01, beta_1=0.9, beta_2=0.999), metrics=['accuracy'])
-# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['binary_accuracy'])
-
-MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(accuracy)).zfill(2)+'/'
-if not os.path.exists(MODEL_DIR):
-    os.mkdir(MODEL_DIR)
-modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-# 모델 업데이트 및 저장
-checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
-early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-
-history = model.fit(X, Y, validation_split=0.1, epochs=epochs, verbose=0, batch_size=len(X),
-                    callbacks=[checkpointer, early_stopping_callback])
-
-plt.figure(figsize=(8, 8))
-# 테스트 셋의 오차
-# y_acc = history.history['binary_accuracy']
-y_acc = history.history['acc']
-# y_vacc = history.history['val_binary_accuracy']
-y_vacc = history.history['val_acc']
-y_loss = history.history['loss']
-y_vloss = history.history['val_loss']
-# 그래프로 표현
-x_len = np.arange(len(y_loss))
-# plt.plot(x_len, y_acc, c="blue", label='binary_accuracy')
-plt.plot(x_len, y_acc, c="blue", label='acc')
-# plt.plot(x_len, y_vacc, c="red", label='val_binary_accuracy')
-plt.plot(x_len, y_vacc, c="red", label='val_acc')
-plt.plot(x_len, y_loss, c="green", label='loss')
-plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-# 그래프에 그리드를 주고 레이블을 표시
-plt.legend(loc='upper left')
-plt.grid()
-plt.xlabel('epoch')
-plt.ylabel('acc')
-plt.show()
-
-file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
-file_list.sort()  # 만든날짜 정렬
-print(file_list[0])
-model = load_model(MODEL_DIR + file_list[0])
-
-prediction_for_test = np.where(model.predict(X_test.values, batch_size=len(X_test)) < 0.5, 0, 1)
-# for timeAndDate, predic in zip(X_test.index.values, prediction_for_test):
-#     print("%s" % timeAndDate, ": %d" % predic)
-prediction_for_test_DF_DateGuWall = pd.DataFrame(data=prediction_for_test, index=X_test.index.values)
-
-# print(prediction_for_test_DF_DateGuWall)
-print(prediction_for_test_DF_DateGuWall.sum())
-print(prediction_for_test_DF_DateGuWall.shape)
-prediction_for_test_DF_DateGuWall.to_csv('prediction_for_test_DF_DateGuWall.csv', encoding='utf-8')
-'''
+"""

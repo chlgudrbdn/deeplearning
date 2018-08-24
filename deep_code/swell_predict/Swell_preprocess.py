@@ -241,24 +241,17 @@ swell_Y_DF_flatten.to_csv('swell_Y_DF_flatten.csv', encoding='utf-8')
 # 함부로 정렬하면 9:00이 11:00 보다 커지게 된다. s = mydatetime.strftime('%Y-%m-%d %I:%M%p').lstrip("0").replace(" 0", " ")
 # https://stackoverflow.com/questions/9525944/python-datetime-formatting-without-zero-padding  참고
 test_dates_times = []
-at_first = 0
+# at_first = 0
 test_dates = list(test_dates)
 test_dates.sort()
 for test_day in test_dates:
-    if at_first == 0:
-        for time in time_grid:
-            test_dates_times.append(test_day + " " + time)
-            if time == '23:00':
-                at_first = 1
-                break
-    elif at_first == 1:
-        for time in rotated_time_grid:
-            test_dates_times.append(test_day + " " + time)
-            if test_dates[-1] == test_day and time == '23:00':
-                for idx in range(7):
-                    test_dates_times.append(test_day + " " + rotated_time_grid[idx])
-    # for test_time in time_grid:
-    #     test_dates_times.append(test_day + " " + test_time)
+    for num in range(len(time_grid)):
+        if num < 17:  # 23시는 17번째. index론 16번째
+            test_dates_times.append(test_day + " " + time_grid[num])
+        else:
+            next_date_dawn = dt.strptime(test_day, '%Y-%m-%d').date() + timedelta(days=1)
+            next_date_dawn = next_date_dawn.strftime('%Y-%m-%d')
+            test_dates_times.append(next_date_dawn + " " + time_grid[num])
 test_dates_times_df = pd.DataFrame(data=test_dates_times, columns=['test_date'])
 test_dates_times_df.to_csv('test_dates_times.csv', encoding='utf-8')
 
@@ -427,75 +420,75 @@ for i in list(comb):
 # 4개 조합 : 2개 (포항은 크게 2가지)
 ind_var_with_DateGuWallPo = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_DateGuWallPo.to_csv('ind_var_with_DateGuWallPo.csv', encoding='utf-8')
-print("ind_var_with_DateGuWallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWallPo.index.values))
+print("ind_var_with_DateGuWallPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGuWallPo.index.values)))
 ind_var_with_DateGuWallPo_withoutwind = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DateGuWallPo_withoutwind.to_csv('ind_var_with_DateGuWallPo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_DateGuWallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWallPo_withoutwind.index.values))
+print("ind_var_with_DateGuWallPo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGuWallPo_withoutwind.index.values)))
 # 3개 조합 : 4*2개
 ind_var_with_DateGuWall = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateGuWall.to_csv('ind_var_with_DateGuWall.csv', encoding='utf-8')
-print("ind_var_with_DateGuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWall.index.values))
+print("ind_var_with_DateGuWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGuWall.index.values)))
 ind_var_with_DateGuPo = pd.concat([data_about_time_flatten, GuRyoungPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_DateGuPo.to_csv('ind_var_with_DateGuPo.csv', encoding='utf-8')
-print("ind_var_with_DateGuPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuPo.index.values))
+print("ind_var_with_DateGuPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGuPo.index.values)))
 ind_var_with_DateWallPo = pd.concat([data_about_time_flatten, WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_DateWallPo.to_csv('ind_var_with_DateWallPo.csv', encoding='utf-8')
-print("ind_var_with_DateWallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWallPo.index.values))
+print("ind_var_with_DateWallPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateWallPo.index.values)))
 ind_var_with_GuWallPo = pd.concat([GuRyoungPo_hour, WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_GuWallPo.to_csv('ind_var_with_GuWallPo.csv', encoding='utf-8')
-print("ind_var_with_GuWallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWallPo.index.values))
+print("ind_var_with_GuWallPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_GuWallPo.index.values)))
 
 ind_var_with_DateGuWall = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateGuWall.to_csv('ind_var_with_DateGuWall.csv', encoding='utf-8')
-print("ind_var_with_DateGuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuWall.index.values))
+print("ind_var_with_DateGuWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGuWall.index.values)))
 ind_var_with_DateGuPo_withoutwind = pd.concat([data_about_time_flatten, GuRyoungPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DateGuPo_withoutwind.to_csv('ind_var_with_DateGuPo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_DateGuPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGuPo_withoutwind.index.values))
+print("ind_var_with_DateGuPo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGuPo_withoutwind.index.values)))
 ind_var_with_DateWallPo_withoutwind = pd.concat([data_about_time_flatten, WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DateWallPo_withoutwind.to_csv('ind_var_with_DateWallPo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_DateWallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWallPo_withoutwind.index.values))
+print("ind_var_with_DateWallPo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateWallPo_withoutwind.index.values)))
 ind_var_with_GuWallPo_withoutwind = pd.concat([GuRyoungPo_hour, WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_GuWallPo_withoutwind.to_csv('ind_var_with_GuWallPo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_GuWallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWallPo_withoutwind.index.values))
+print("ind_var_with_GuWallPo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_GuWallPo_withoutwind.index.values)))
 
 # 2개 조합 : 6개
 ind_var_with_DateGu = pd.concat([data_about_time_flatten, GuRyoungPo_hour], axis=1, join='inner')
 ind_var_with_DateGu.to_csv('ind_var_with_DateGu.csv', encoding='utf-8')
-print("ind_var_with_DateGu can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGu.index.values))
+print("ind_var_with_DateGu can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGu.index.values)))
 ind_var_with_DateWall = pd.concat([data_about_time_flatten, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateWall.to_csv('ind_var_with_DateWall.csv', encoding='utf-8')
-print("ind_var_with_DateWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWall.index.values))
+print("ind_var_with_DateWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateWall.index.values)))
 ind_var_with_DatePo = pd.concat([data_about_time_flatten, Pohang_hour], axis=1, join='inner')
 ind_var_with_DatePo.to_csv('ind_var_with_DatePo.csv', encoding='utf-8')
-print("ind_var_with_DatePo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DatePo.index.values))
+print("ind_var_with_DatePo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DatePo.index.values)))
 ind_var_with_GuWall = pd.concat([GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_GuWall.to_csv('ind_var_with_GuWall.csv', encoding='utf-8')
-print("ind_var_with_GuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWall.index.values))
+print("ind_var_with_GuWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_GuWall.index.values)))
 ind_var_with_GuPo = pd.concat([GuRyoungPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_GuPo.to_csv('ind_var_with_GuPo.csv', encoding='utf-8')
-print("ind_var_with_GuPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuPo.index.values))
+print("ind_var_with_GuPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_GuPo.index.values)))
 ind_var_with_WallPo = pd.concat([WallPo_hour, Pohang_hour], axis=1, join='inner')
 ind_var_with_WallPo.to_csv('ind_var_with_WallPo.csv', encoding='utf-8')
-print("ind_var_with_WallPo can't handle date : %s" % set(test_dates_times) - set(ind_var_with_WallPo.index.values))
+print("ind_var_with_WallPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_WallPo.index.values)))
 
 ind_var_with_DateGu = pd.concat([data_about_time_flatten, GuRyoungPo_hour], axis=1, join='inner')
 ind_var_with_DateGu.to_csv('ind_var_with_DateGu.csv', encoding='utf-8')
-print("ind_var_with_DateGu can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateGu.index.values))
+print("ind_var_with_DateGu can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGu.index.values)))
 ind_var_with_DateWall = pd.concat([data_about_time_flatten, WallPo_hour], axis=1, join='inner')
 ind_var_with_DateWall.to_csv('ind_var_with_DateWall.csv', encoding='utf-8')
-print("ind_var_with_DateWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DateWall.index.values))
+print("ind_var_with_DateWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateWall.index.values)))
 ind_var_with_DatePo_withoutwind = pd.concat([data_about_time_flatten, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DatePo_withoutwind.to_csv('ind_var_with_DatePo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_DatePo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_DatePo_withoutwind.index.values))
+print("ind_var_with_DatePo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DatePo_withoutwind.index.values)))
 ind_var_with_GuWall = pd.concat([GuRyoungPo_hour, WallPo_hour], axis=1, join='inner')
 ind_var_with_GuWall.to_csv('ind_var_with_GuWall.csv', encoding='utf-8')
-print("ind_var_with_GuWall can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuWall.index.values))
+print("ind_var_with_GuWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_GuWall.index.values)))
 ind_var_with_GuPo_withoutwind = pd.concat([GuRyoungPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_GuPo_withoutwind.to_csv('ind_var_with_GuPo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_GuPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_GuPo_withoutwind.index.values))
+print("ind_var_with_GuPo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_GuPo_withoutwind.index.values)))
 ind_var_with_WallPo_withoutwind = pd.concat([WallPo_hour, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_WallPo_withoutwind.to_csv('ind_var_with_WallPo_withoutwind.csv', encoding='utf-8')
-print("ind_var_with_WallPo_withoutwind can't handle date : %s" % set(test_dates_times) - set(ind_var_with_WallPo_withoutwind.index.values))
+print("ind_var_with_WallPo_withoutwind can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_WallPo_withoutwind.index.values)))
 
 # 1개 조합 : 4개. 이미 위에서 한거다.
 

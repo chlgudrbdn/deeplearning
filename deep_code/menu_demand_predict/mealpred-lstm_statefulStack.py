@@ -37,16 +37,6 @@ def create_dataset(dataset, look_back=1):
     return np.array(dataX), np.array(dataY)  # 즉 look_back은 1대 look_back+1만큼 Y와 X를 대응 시켜 예측하게 만듦. 이짓을 대충 천번쯤 하는거다.
 
 
-# create a differenced series
-def difference(dataset, interval=1):
-    diff = list()
-    for i in range(interval, len(dataset)):
-        value = dataset[i] - dataset[i - interval]
-        diff.append(value)
-    return pd.Series(diff)
-
-
-'''
 class CustomHistory(keras.callbacks.Callback):
     def init(self):
         self.train_loss = []
@@ -55,57 +45,6 @@ class CustomHistory(keras.callbacks.Callback):
     def on_epoch_end(self, batch, logs={}):
         self.train_loss.append(logs.get('loss'))
         self.val_loss.append(logs.get('val_loss'))
-'''
-
-
-# fit an LSTM network to training data
-def fit_lstm(train, n_lag, n_seq, n_batch, nb_epoch, n_neurons):
-    # reshape training into [samples, timesteps, features]
-    X, y = train[:, 0:n_lag], train[:, n_lag:]
-    X = X.reshape(X.shape[0], 1, X.shape[1])
-    # design network
-    model = Sequential()
-    model.add(LSTM(n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]), stateful=True))
-    model.add(Dense(y.shape[1]))
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    # fit network
-    for i in range(nb_epoch):
-        model.fit(X, y, epochs=1, batch_size=n_batch, verbose=0, shuffle=False)
-        model.reset_states()
-    return model
-
-
-# make one forecast with an LSTM,
-def forecast_lstm(model, X, n_batch):
-    # reshape input pattern to [samples, timesteps, features]
-    X = X.reshape(1, 1, len(X))
-    # make forecast
-    forecast = model.predict(X, batch_size=n_batch)
-    # convert to array
-    return [x for x in forecast[0, :]]
-
-
-# evaluate the persistence model
-def make_forecasts(model, n_batch, train, test, n_lag, n_seq):
-    forecasts = list()
-    for i in range(len(test)):
-        X, y = test[i, 0:n_lag], test[i, n_lag:]
-        # make forecast
-        forecast = forecast_lstm(model, X, n_batch)
-        # store the forecast
-        forecasts.append(forecast)
-    return forecasts
-
-
-# invert differenced forecast
-def inverse_difference(last_ob, forecast):
-    # invert first forecast
-    inverted = list()
-    inverted.append(forecast[0] + last_ob)
-    # propagate difference forecast using inverted first value
-    for i in range(1, len(forecast)):
-        inverted.append(forecast[i] + inverted[i - 1])
-    return inverted
 
 
 # inverse data transform on forecasts
@@ -115,30 +54,6 @@ def search_best_model(MODEL_DIR):
     file_list.sort()  # 만든날짜 정렬
     model = load_model(MODEL_DIR + '{0:.9f}'.format(file_list[0]) + ".hdf5")
     return model
-
-
-# evaluate the RMSE for each forecast time step
-def evaluate_forecasts(test, forecasts, n_lag, n_seq):
-    for i in range(n_seq):
-        actual = [row[i] for row in test]
-        predicted = [forecast[i] for forecast in forecasts]
-        rmse = math.sqrt(mean_squared_error(actual, predicted))
-        print('t+%d RMSE: %f' % ((i + 1), rmse))
-
-
-# plot the forecasts in the context of the original dataset
-def plot_forecasts(series, forecasts, n_test):
-    # plot the entire dataset in blue
-    plt.plot(series.values)
-    # plot the forecasts in red
-    for i in range(len(forecasts)):
-        off_s = len(series) - n_test + i - 1
-        off_e = off_s + len(forecasts[i]) + 1
-        xaxis = [x for x in range(off_s, off_e)]
-        yaxis = [series.values[off_s]] + forecasts[i]
-        plt.plot(xaxis, yaxis, color='red')
-    # show the plot
-    plt.show()
 
 
 def ordering_meal(mealList):
@@ -226,15 +141,10 @@ test_date_df = test_date_df.drop(columns=['수량_x', '수량_y', '식사명Enco
 test_date_df = test_date_df.rename(columns={'식사명Encoddeded_y': '식사명Encoddeded'})
 test_date_df = test_date_df.astype('float32')
 
-# collection_df_drop_menu = collection_df_drop_menu.reset_index().set_index(['일자'])
-# cols = collection_df_drop_menu.columns.tolist()
-# cols = cols[1:] + cols[:1]
-# collection_df_drop_menu = collection_df_drop_menu[cols]
-
 scaler = MinMaxScaler(feature_range=(0, 1))
 cols = collection_df_drop_menu.columns.tolist()
 
-TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values[:, 1:])  # 뗏다 붙여서 normalization을 X에만 적용
+TrainXdf_scaled = scaler.fit_transform(collection_df_drop_menu.values[:, 1:])  # 수량 파트를 inverse transform하기 번거로우므로 뗏다 붙여서 normalization을 X에만 적용
 mealDemand = collection_df_drop_menu.values[:, 0].reshape((-1, 1))
 TrainXdf_scaled = np.concatenate((TrainXdf_scaled, mealDemand), axis=1)
 TrainXdf = pd.DataFrame(data=TrainXdf_scaled, index=collection_df_drop_menu.index, columns=cols[1:] + cols[:1])  # 최종적으로 사용.
@@ -251,9 +161,9 @@ rmse_Scores = []
 number_of_var = len(cols)
 first_layer_node_cnt = int(number_of_var*(number_of_var-1)/2)
 # print("first_layer_node_cnt %d" % first_layer_node_cnt)
-epochs = 2000  # 2천번 가까이 했는데도 더 내려갈 구석이 있었다. 그리고 한바퀴에 37분 걸림.
-# epochs = 2
-patience_num = 300
+epochs = 50
+# epochs = 2  # stack으로 epoch2에 1 iteration 1분정도 걸림. 50iterataion이면 50분 여기에 epoch 50이면 2500분. 40시간 예상. 여유잡아 80시간.
+patience_num = 10
 # patience_num = 2
 look_back = 4 * 8  # test date 날짜 차이가 최소 8일(20140606과 20140529사이) 정도 되는 것 같다. 공백과 공백 사이로는 5일(점심2가 없는 날은 다행이 20110912 외엔 없으므로 20칸 정도차이)
 # 번거롭고 별로 예측력이 강해질 것 같지도 않으니 8일전 자료(예측 포함)를 기반으로 계산. # 아마 점심2가 없는 20110912, 20120930 때문에 결과값이 하나 더나와서 삐뚤어지는 결과가 생길것이다.
@@ -275,32 +185,7 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     EndValidationDate = firstEmptyDate - timedelta(days=1)  # 20100712 : 20100705와는 8일차이.
     StartTestDate = firstEmptyDate  # 20100713
     EndTestDate = StartTestDate + timedelta(days=2)  # 20100715
-    '''
-    # only for train
-    X_train = TrainXdf.loc[changeDateToStr(StartTrainDate):changeDateToStr(EndTrainDate)].values  # list slice와 달리 : 뒤쪽 항도 포함된다.
-    X_train, y_train = create_dataset(X_train, look_back)
 
-    # only for validation
-    X_val = TrainXdf.loc[changeDateToStr(StartValidationDate):changeDateToStr(EndValidationDate)].values
-    # print(X_val)
-    X_val, y_val = create_dataset(X_val, look_back)
-
-    if changeDateToStr(firstEmptyDate) == str(20110912) or  changeDateToStr(firstEmptyDate) == str(20120930):
-        X_val = np.delete(X_val, 2, 0)  # 원래대로라면 점심2가 와야할 차례지만 없으므로 아예 빼버리던가 해야할 것이다.
-        Y_val = np.delete(Y_val, 2, 0)  # 원래대로라면 점심2가 와야할 차례지만 없으므로 아예 빼버리던가 해야할 것이다.
-    elif changeDateToStr(firstEmptyDate) == str(20171008):
-    # only for forecast with rolling
-    # X_test_for_train = np.vstack([X_train, X_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
-    # Y_test_for_train = np.vstack([Y_train, Y_val])  # 제출용 날짜 예측을 위한 훈련 데이터 재구성.
-    X_test = TestXdf.loc[int(changeDateToStr(StartTestDate)):int(changeDateToStr(EndTestDate))].values  # 별도로 안한다. 어차피 0~100사이 정규화 되어 있기도 하고.
-    # X_test_for_train = create_dataset_only_train(X_test_for_train)
-
-    # print(X_train.shape)
-    # print(y_train.shape)
-    print(X_val.shape)
-    print(y_val.shape)
-    print(X_test.shape)
-    '''
     X_train_df = TrainXdf.loc[int(changeDateToStr(StartTrainDate)):int(changeDateToStr(EndValidationDate))]  # list slice와 달리 : 뒤쪽 항도 포함된다. # 일단 validataion 데이터도 같이 부른다.
     X_train = X_train_df.values
     # X_train = X_train_df.values[:, 22:]
@@ -331,19 +216,14 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     X_train = X_train.reshape(X_train.shape[0], look_back, X_train.shape[2])
     X_val = X_val.reshape(X_val.shape[0], look_back, X_val.shape[2])
 
-    # n_batch = gcd(X_train.shape[0], X_val.shape[0])  # 일단 배치사이즈를 대충 결정.
+    n_batch = gcd(X_train.shape[0], X_val.shape[0])  # 일단 배치사이즈를 대충 결정.
     model = Sequential()
-    model.add(LSTM(first_layer_node_cnt, input_shape=(X_train.shape[1], X_train.shape[2]), kernel_initializer='random_normal'))
-    model.add(Dropout(0.3))
-    model.add(Activation('relu'))
-    model.add(Dense(int(first_layer_node_cnt/4), activation='relu'))
-    model.add(Dropout(0.3))
-    model.add(Dense(int(first_layer_node_cnt/9), activation='relu'))
-    model.add(Dropout(0.3))
-    model.add(Dense(int(first_layer_node_cnt/16), activation='relu'))
-    model.add(Dropout(0.3))
-    model.add(Dense(int(first_layer_node_cnt/25), activation='relu'))
-    model.add(Dropout(0.3))
+    model.add(LSTM(number_of_var, batch_input_shape=(1, look_back, number_of_var), stateful=True, return_sequences=True))
+    model.add(Dropout(0.1))
+    model.add(LSTM(number_of_var, batch_input_shape=(1, look_back, number_of_var), stateful=True, return_sequences=True))
+    model.add(Dropout(0.1))
+    model.add(LSTM(number_of_var, batch_input_shape=(1, look_back, number_of_var), stateful=True))
+    model.add(Dropout(0.1))
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
 
@@ -355,62 +235,54 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     # # 모델 업데이트 및 저장
     checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
     # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
-    # custom_hist = CustomHistory()
-    # custom_hist.init()
-    history = model.fit(X_train, y_train, epochs=epochs, verbose=0, validation_data=(X_val, y_val),
-              # shuffle=False,
-              batch_size=len(X_train),
-              callbacks=[early_stopping_callback, checkpointer])
+    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
+    custom_hist = CustomHistory()
+    custom_hist.init()
+    # fit network # 에포크 2로 해서 14바퀴 돌리니까 93분정도 걸림. 다 돌려면 332분 정도 들텐데 이거에 25배면 138시간 든다. 고작 epoch 50에 약 6일 소요. 시간부족. 단어는 무시하는 걸로 한정시키자. stateless로 한다던가 해야할듯.
+    for i in range(epochs):
+        model.fit(X_train, y_train, epochs=1, batch_size=1, verbose=0, shuffle=False, validation_data=(X_val, y_val),
+                  callbacks=[custom_hist, checkpointer])
+        model.reset_states()
 
     plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(num).zfill(2))
-    y_loss = history.history['loss']
-    y_vloss = history.history['val_loss']
-    x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    x_len = np.arange(len(custom_hist.val_loss))
     plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
     plt.show()
 
     del model
     model = search_best_model(MODEL_DIR)
-    evalScore = model.evaluate(X_val, y_val, batch_size=len(X_val))
+    evalScore = model.evaluate(X_val, y_val, batch_size=1)
     rmse_Scores.append(math.sqrt(evalScore))
 
     # 생각 같아선 추가된 데이터(validation 파트)를 포함해서 좀 더 훈련시켜두고 싶지만 마땅히 validation할 데이터가 없어 과적합 되기 십상. 그냥 이 모델 써서 예상해본다.
-    afterhistory = model.fit(X_val, y_val, epochs=epochs, verbose=0, validation_data=(X_train, y_train),
-              # shuffle=False,
-              batch_size=len(X_train),
-              callbacks=[early_stopping_callback, checkpointer])
+    for i in range(epochs):
+        model.fit(X_val, y_val, epochs=1, batch_size=1, verbose=0, shuffle=False, validation_data=(X_train, y_train),
+                  callbacks=[custom_hist, checkpointer])
+        model.reset_states()
 
     plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(num).zfill(2))
-    y_loss = afterhistory.history['loss']
-    y_vloss = afterhistory.history['val_loss']
-    x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
-
-    plt.legend(loc='upper left')
-    plt.grid()
-    plt.xlabel('epoch')
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    plt.ylim(0.0, 50.0)
+    x_len = np.arange(len(custom_hist.val_loss))
     plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
     plt.show()
-
     del model
     model = search_best_model(MODEL_DIR)
 
     X_test = X_test_df.values
-
     x_hat = X_train[-1:, ]  # 끄트머리에서 다른 변수들로 계산.
     # x_hat = X_train[-look_back:, ]  # 끄트머리에서 다른 변수들로 계산.
     testPredict = np.zeros((blankCounta, 1))
     test_start_area_absolute_position = TrainXdf.index.get_loc(int(changeDateToStr(StartTestDate))).start
     for k in range(blankCounta):
-        prediction = model.predict(x_hat, batch_size=1)
+        prediction = model.predict(x_hat, batch_size=n_batch)
         # prediction = model.predict(np.array([x_hat]), batch_size=1)
         testPredict[k] = prediction
         # new_x_hat = np.append([X_test[k, ], prediction])
@@ -424,7 +296,7 @@ for num in range(0, len(test_only_date), 3):  # 50회 루프가 있을 것이다
     #     StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
     m, s = divmod((time.time() - start_time), 60)
     print("almost %d minute" % m)
-    break
+    # break
 print("\n about  rmse: %s" % rmse_Scores)
 print("mean rmse %.7f:" % np.mean(rmse_Scores))
 
@@ -437,7 +309,7 @@ prediction_for_meal_demand = prediction_for_meal_demand.loc[onlyDateInTest_df]
 prediction_for_meal_demand = prediction_for_meal_demand.values.reshape((-1, 4))
 
 prediction_for_meal_demand_df = pd.DataFrame(data=prediction_for_meal_demand, index=onlyDateInTest_df, columns=['아침식사', '점심식사', '점심식사2', '저녁식사'])
-prediction_for_meal_demand_df.to_csv(scriptName +' prediction.csv', encoding='utf-8')
+prediction_for_meal_demand_df.to_csv(scriptName + ' prediction.csv', encoding='utf-8')
 """
 
 """
