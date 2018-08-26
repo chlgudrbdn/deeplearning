@@ -47,7 +47,6 @@ class CustomHistory(keras.callbacks.Callback):
         self.val_loss.append(logs.get('val_loss'))
 
 
-# inverse data transform on forecasts
 def search_best_model(MODEL_DIR):
     file_list = os.listdir(MODEL_DIR)  # 루프 가장 최고 모델 다시 불러오기.
     file_list = [float(fileName[:-5]) for fileName in file_list]

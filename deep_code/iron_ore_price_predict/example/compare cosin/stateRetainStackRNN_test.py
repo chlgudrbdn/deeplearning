@@ -117,8 +117,8 @@ plt.legend(['train', 'val'], loc='upper left')
 plt.show()
 
 for i in range(200):
-    model.fit(x_train, y_train, epochs=1, batch_size=1, shuffle=False, callbacks=[custom_hist, checkpointer],
-              validation_data=(x_val, y_val), verbose=0)
+    model.fit(x_val, y_val, epochs=1, batch_size=1, shuffle=False, callbacks=[custom_hist, checkpointer],
+              validation_data=(x_train, y_train), verbose=0)
     model.reset_states()
 
 model = search_best_model(MODEL_DIR)

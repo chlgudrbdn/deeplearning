@@ -96,12 +96,12 @@ K.set_session(sess)
 tf.global_variables_initializer()
 
 test_dates_df = pd.read_csv('test_dates_times.csv', index_col=[1], skiprows=0)  # 확인결과 중복있다.
-test_dates_df = test_dates_df[~test_dates_df.index.duplicated(keep='first')]
+test_dates_df = test_dates_df[~test_dates_df.index.duplicated(keep='first')]  # 만의 하나의 가능성
 test_dates_df.sort_index(inplace=True)  # 테스트할 데이터.
 test_dates = test_dates_df.index.values.flatten().tolist()
 
 # 데이터 불러오기
-X_df = pd.read_csv('GuRyoungPo_hour.csv', index_col=[0])
+X_df = pd.read_csv('WallPo_hour.csv', index_col=[0])
 X_df.sort_index(inplace=True)  # 데이터가 존재.
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
@@ -131,8 +131,12 @@ print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date),
 abnormal_date_X_df = X_df.loc[abnormal_date]  # 훈련에는 여기에 속한 날을 예측해야할 것이다.
 swell_date_X_df = X_df.loc[swell_date]  # 훈련에는 여기에 속한 날을 예측해야할 것이다.
 
-X_train_df = X_df.loc[X_df_index]  # 일단 예측해야할 날짜의 데이터를 제외하고 가진 정보를 모두 발휘할 수 있는 범위
-X = X_train_df.values.astype('float32')
+abnormal_and_swell_date_X_df = X_df.loc[abnormal_date, swell_date]
+abnormal_and_swell_date_X_df.sort_index(inplace=True)
+# X_train_df = X_df.loc[X_df_index]  # 일단 예측해야할 날짜의 데이터를 제외하고 가진 정보를 모두 발휘할 수 있는 범위
+
+# X = X_train_df.values.astype('float32')
+X = abnormal_and_swell_date_X_df.values.astype('float32')
 # X_scaler = MinMaxScaler(feature_range=(0, 1))
 # X = X_scaler.fit_transform(X)
 
@@ -151,7 +155,7 @@ Y = Y_df_with_data.values
 epochs = 300
 patience_num = 200
 n_hours = 4  # 일단 예측해야하는 날 사이 최소 11일 정도 간격 차이가 있다. 44개의 데이터로 어떻게든 학습하던가 아니면 보간된 걸로 어떻게든 해본다던가.
-n_features = len(X_train_df.columns)  # 5
+n_features = len(abnormal_and_swell_date_X_df.columns)  # 5
 ###############
 
 scaler = MinMaxScaler(feature_range=(0, 1))
@@ -165,7 +169,7 @@ values_df_outer = pd.concat([X_df_scaled, Y_df], axis=1, join='outer')  # 마지
 # frame as supervised learning
 reframed = series_to_supervised(values_df.values, n_hours, 1)  # t+1 같은 데이터는 별로 필요 없어서 1로 n_out 지정
 # reframed = series_to_supervised(scaled, n_hours, 1)  # t+1 같은 데이터는 별로 필요 없어서 1로 n_out 지정
-reframed.drop(reframed.columns[-n_features: ], axis=1, inplace=True)  # 예측해야하는건 이후의 모든 데이터가 아닌 1개의 데이터 뿐.
+reframed.drop(reframed.columns[-n_features:], axis=1, inplace=True)  # 예측해야하는건 이후의 모든 데이터가 아닌 1개의 데이터 뿐.
 
 first_layer_node_cnt = int(reframed.shape[1]*(reframed.shape[1]-1)/2)  # 완전 연결 가정한 edge
 
@@ -198,8 +202,129 @@ scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
 """
 for date in swell_only_date:
     forecast_date = values_df_outer.filter(regex=date, axis=0)
+    
+    print("----------------loop Num : ", num/3)
+    # 최소 validation에 3일, tarin에 1일이라고 치면 가장 처음으로 빈칸이 생긴 날로부터 5일전이 최소로 필요. 물론 너무 적은 데이터라서 이 파트는 문제.
+    # 일단 굴려보고 어떻게든 채워넣는 방법을 쓰는것도 나쁘진 않을 것 같다. !시간도 데이터도 부족하니 이 방법으로 간다.!
+    # dt.strptime(str(test_only_date[num]), '%Y%m%d').date()는 최초로 빈칸이 생기는 날짜. +2 하면 제출일자가 된다.
+    firstEmptyDate = dt.strptime(str(test_only_date[num]), '%Y%m%d').date()
+    EndTrainDate = firstEmptyDate - timedelta(days=4)  # 20100709 # 2014-06-04 - 4 = 2010-05-30까지
+    StartValidationDate = firstEmptyDate - timedelta(days=3)  # 20100710  # 20100705. 3일을 예측해야하지만 그전에 8일정도의 데이터를 기반으로 추측해서 RMSE를 추측할 예정.
+    EndValidationDate = firstEmptyDate - timedelta(days=1)  # 20100712 : 20100705와는 8일차이.
+    StartTestDate = firstEmptyDate  # 20100713
+    EndTestDate = StartTestDate + timedelta(days=2)  # 20100715
 
+    X_train_df = TrainXdf.loc[int(changeDateToStr(StartTrainDate)):int(changeDateToStr(EndValidationDate))]  # list slice와 달리 : 뒤쪽 항도 포함된다. # 일단 validataion 데이터도 같이 부른다.
+    X_train = X_train_df.values
+    # X_train = X_train_df.values[:, 22:]
 
+    X_val_df = TrainXdf.loc[int(changeDateToStr(StartValidationDate)):int(changeDateToStr(EndValidationDate))]  # validation에 사용할 빈칸 이전의 3일관련 데이터.
+    X_test_df = TestXdf.loc[int(changeDateToStr(StartTestDate)):int(changeDateToStr(EndTestDate))]
+    blankCounta = X_test_df.shape[0]
+    # if blankCounta != 12:
+    #     print(X_val_df)
+
+    # print("blankCounta : ", blankCounta)
+    # print(X_train.shape)
+    X_val = X_train[-look_back-blankCounta:, ]  # validation에 사용할 데이터 세트를 구축하기 위해 look_back 덧붙이기. 4*8 + 12
+    X_train = X_train[:-blankCounta, ]  # validation할때 사용할 데이터만 제외하고 훈련
+
+    print("StartTrainDate : ", StartTrainDate)
+    print("EndTrainDate : ", EndTrainDate)
+    # print(X_train.shape)
+    print("StartValidationDate : ", StartValidationDate)
+    print("EndValidationDate : ", EndValidationDate)
+    # print(X_val.shape)
+    print("StartTestDate : ", StartTestDate)
+    print("EndTestDate : ", EndTestDate)
+
+    X_train, y_train = create_dataset(X_train, look_back)
+    X_val, y_val = create_dataset(X_val, look_back)
+    # reshape training into [samples, timesteps, features]
+    X_train = X_train.reshape(X_train.shape[0], look_back, X_train.shape[2])
+    X_val = X_val.reshape(X_val.shape[0], look_back, X_val.shape[2])
+
+    n_batch = gcd(X_train.shape[0], X_val.shape[0])  # 일단 배치사이즈를 대충 결정.
+    model = Sequential()
+    model.add(LSTM(number_of_var, batch_input_shape=(1, look_back, number_of_var), stateful=True, return_sequences=True))
+    model.add(Dropout(0.1))
+    model.add(LSTM(number_of_var, batch_input_shape=(1, look_back, number_of_var), stateful=True, return_sequences=True))
+    model.add(Dropout(0.1))
+    model.add(LSTM(number_of_var, batch_input_shape=(1, look_back, number_of_var), stateful=True))
+    model.add(Dropout(0.1))
+    model.add(Dense(1))
+    model.compile(loss='mean_squared_error', optimizer='adam')
+
+    # 모델 저장 폴더 만들기
+    MODEL_DIR = './' + scriptName + ' model_loopNum' + str(num).zfill(2) + '/'
+    if not os.path.exists(MODEL_DIR):
+        os.mkdir(MODEL_DIR)
+    modelpath = MODEL_DIR + "{val_loss:.9f}.hdf5"
+    # # 모델 업데이트 및 저장
+    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
+    # 학습 자동 중단 설정
+    # early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
+    custom_hist = CustomHistory()
+    custom_hist.init()
+    # fit network # 에포크 2로 해서 14바퀴 돌리니까 93분정도 걸림. 다 돌려면 332분 정도 들텐데 이거에 25배면 138시간 든다. 고작 epoch 50에 약 6일 소요. 시간부족. 단어는 무시하는 걸로 한정시키자. stateless로 한다던가 해야할듯.
+    for i in range(epochs):
+        model.fit(X_train, y_train, epochs=1, batch_size=1, verbose=0, shuffle=False, validation_data=(X_val, y_val),
+                  callbacks=[custom_hist, checkpointer])
+        model.reset_states()
+
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(num).zfill(2))
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    x_len = np.arange(len(custom_hist.val_loss))
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+    plt.show()
+
+    del model
+    model = search_best_model(MODEL_DIR)
+    evalScore = model.evaluate(X_val, y_val, batch_size=1)
+    rmse_Scores.append(math.sqrt(evalScore))
+
+    # 생각 같아선 추가된 데이터(validation 파트)를 포함해서 좀 더 훈련시켜두고 싶지만 마땅히 validation할 데이터가 없어 과적합 되기 십상. 그냥 이 모델 써서 예상해본다.
+    for i in range(epochs):
+        model.fit(X_val, y_val, epochs=1, batch_size=1, verbose=0, shuffle=False, validation_data=(X_train, y_train),
+                  callbacks=[custom_hist, checkpointer])
+        model.reset_states()
+
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName+' model_loopNum'+str(num).zfill(2))
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    plt.ylim(0.0, 50.0)
+    x_len = np.arange(len(custom_hist.val_loss))
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+    plt.show()
+    del model
+    model = search_best_model(MODEL_DIR)
+
+    X_test = X_test_df.values
+    x_hat = X_train[-1:, ]  # 끄트머리에서 다른 변수들로 계산.
+    # x_hat = X_train[-look_back:, ]  # 끄트머리에서 다른 변수들로 계산.
+    testPredict = np.zeros((blankCounta, 1))
+    test_start_area_absolute_position = TrainXdf.index.get_loc(int(changeDateToStr(StartTestDate))).start
+    for k in range(blankCounta):
+        prediction = model.predict(x_hat, batch_size=n_batch)
+        # prediction = model.predict(np.array([x_hat]), batch_size=1)
+        testPredict[k] = prediction
+        # new_x_hat = np.append([X_test[k, ], prediction])
+        new_x_hat = np.vstack([np.reshape(X_test[k], (-1, 1)), prediction])
+        x_hat = np.asarray([np.vstack([x_hat[0][1:], np.reshape(new_x_hat, (1, -1))])])
+        # print(x_hat.shape)
+        TrainXdf.iloc[test_start_area_absolute_position + k, -1] = prediction
+
+    forecast_satck.extend(testPredict)
+    # if num != len(test_only_date) - 3: # 마지막 루프만 아니면
+    #     StartTrainDate = EndTestDate + timedelta(days=1)  # 다음 루프때 쓸 train data 구간 규정
+    m, s = divmod((time.time() - start_time), 60)
+    print("almost %d minute" % m)
+    # break
 
 
 

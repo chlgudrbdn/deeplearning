@@ -411,11 +411,11 @@ data_about_time_flatten = pd.DataFrame(
     {'year': years, 'month': months, 'weekday': weekdays, 'weeknums': weeknums, 'oClock': oClock},
     index=index_for_flatten_swell)
 data_about_time_flatten.to_csv('data_about_time_flatten.csv', encoding='utf-8')  # 시간에 따른 영향을 측정시 사용.
-'''
+
 comb = combinations(['data_about_time_flatten', 'GuRyoungPo_hour', 'WallPo_hour', 'Pohang_hour'], 2)
 for i in list(comb):
     print(i)
-'''
+
 
 # 4개 조합 : 2개 (포항은 크게 2가지)
 ind_var_with_DateGuWallPo = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour, Pohang_hour], axis=1, join='inner')
@@ -471,11 +471,11 @@ ind_var_with_WallPo = pd.concat([WallPo_hour, Pohang_hour], axis=1, join='inner'
 ind_var_with_WallPo.to_csv('ind_var_with_WallPo.csv', encoding='utf-8')
 print("ind_var_with_WallPo can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_WallPo.index.values)))
 
-ind_var_with_DateGu = pd.concat([data_about_time_flatten, GuRyoungPo_hour], axis=1, join='inner')
-ind_var_with_DateGu.to_csv('ind_var_with_DateGu.csv', encoding='utf-8')
-print("ind_var_with_DateGu can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGu.index.values)))
-ind_var_with_DateWall = pd.concat([data_about_time_flatten, WallPo_hour], axis=1, join='inner')
-ind_var_with_DateWall.to_csv('ind_var_with_DateWall.csv', encoding='utf-8')
+# ind_var_with_DateGu = pd.concat([data_about_time_flatten, GuRyoungPo_hour], axis=1, join='inner')
+# ind_var_with_DateGu.to_csv('ind_var_with_DateGu.csv', encoding='utf-8')
+# print("ind_var_with_DateGu can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateGu.index.values)))
+# ind_var_with_DateWall = pd.concat([data_about_time_flatten, WallPo_hour], axis=1, join='inner')
+# ind_var_with_DateWall.to_csv('ind_var_with_DateWall.csv', encoding='utf-8')
 print("ind_var_with_DateWall can't handle date : %s" % len(set(test_dates_times) - set(ind_var_with_DateWall.index.values)))
 ind_var_with_DatePo_withoutwind = pd.concat([data_about_time_flatten, Pohang_hour_without_wind], axis=1, join='inner')
 ind_var_with_DatePo_withoutwind.to_csv('ind_var_with_DatePo_withoutwind.csv', encoding='utf-8')
