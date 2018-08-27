@@ -117,6 +117,17 @@ def gcd(a, b):
 # 출처: http://codepractice.tistory.com/65 [코딩 연습]
 
 
+def check_before_timeseries_data_contain_nan(date_and_time, df):
+    date_and_time_start = dt.strptime(date_and_time, '%Y-%m-%d %H:%M') - timedelta(hours=4)
+    date_and_time_end = dt.strptime(date_and_time, '%Y-%m-%d %H:%M') - timedelta(hours=1)
+    before_4steps = df.loc[date_and_time_start.strftime('%Y-%m-%d %H:%M'): date_and_time_end.strftime('%Y-%m-%d %H:%M')]
+    if before_4steps[pd.isnull(before_4steps).any(axis=1)].shape[0] > 0:
+        print("not enough data at ", date_and_time_end)
+        return True
+    print(before_4steps)
+    return False
+
+
 # fix random seed for reproducibility
 seed = 42
 os.environ['PYTHONHASHSEED'] = '0'
@@ -142,23 +153,25 @@ X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 �
 test_dates_in_X_df = set(test_dates).intersection(set(X_df.index.values))  # 제출해야할 날짜에 자료가 있는 시간.
 
 # 인덱스 호출시 사용할
-# abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
-# abnormal_date.sort_index(inplace=True)
-# abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
-# abnormal_date = set(abnormal_date).intersection(X_df_index)
+abnormal_date = pd.read_csv('only_abnormal_not_swell_time_DF_flatten.csv', index_col=[0])
+abnormal_date.sort_index(inplace=True)
+abnormal_date = abnormal_date[abnormal_date['0'] == 1].index.values
+abnormal_date = set(abnormal_date).intersection(X_df_index)
 
-# abnormal_only_date = divide_dateAndTime(X_df.loc[abnormal_date])  # 시간 빼고 날짜만 추출
+abnormal_only_date = divide_dateAndTime(X_df.loc[abnormal_date])  # 시간 빼고 날짜만 추출
 
-# swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
-# swell_date.sort_index(inplace=True)
-# swell_date = swell_date[swell_date['0'] == 1].index.values
-# swell_date = set(swell_date).intersection(X_df_index)
+swell_date = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])
+swell_date.sort_index(inplace=True)
+swell_date = swell_date[swell_date['0'] == 1].index.values
+swell_date = set(swell_date).intersection(X_df_index)
 
-# swell_only_date = divide_dateAndTime(X_df.loc[swell_date])  # 시간 빼고 날짜만 추출
+swell_only_date = divide_dateAndTime(X_df.loc[swell_date])  # 시간 빼고 날짜만 추출
 
-# normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
-# normal_date = (X_df_index - swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
-# print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
+ab_and_swell_set = abnormal_only_date.union(swell_only_date)
+
+normal_date = pd.read_csv('normal_date.csv', index_col=[0]).values.flatten().tolist()
+normal_date = (X_df_index - swell_date) - abnormal_date  # test도 swell도 비정상 날씨도 아닌 날.
+print("length check normal : %d, abnormal : %d, swell : %d" % (len(normal_date), len(abnormal_date), len(swell_date)))
 
 Y_df = pd.read_csv('swell_Y_DF_flatten.csv', index_col=[0])  # 모든 시간이 완벽하게 갖춰져있다. 그러나 test를 위한 날짜도 포함되어 있다는 것을 기억해야함.
 onlyXnotY = set(X_df.index.values) - set(Y_df.index.values)  # 여기엔 아무 값도 없어야 한다.
@@ -176,7 +189,7 @@ scaler = MinMaxScaler(feature_range=(0, 1))
 
 # hyperParameter
 # epochs = 2
-epochs = 100
+epochs = 50
 # patience_num = 2
 # patience_num = 20
 n_hours = 4  # 일단 예측해야하는 날 사이 최소 11일 정도 간격 차이가 있다. 44개의 데이터로 어떻게든 학습하던가 아니면 보간된 걸로 어떻게든 해본다던가.
@@ -223,12 +236,14 @@ first_layer_node_cnt = int(n_obs * (n_obs - 1)/2)  # 완전 연결 가정한 edg
 mseList = []
 
 scriptName = os.path.basename(os.path.realpath(sys.argv[0]))
-
 num = 0
 nan_retain_row = values_df_outer[pd.isnull(values_df_outer).any(axis=1)]
 for index, row in nan_retain_row.iterrows():
+    if index.split(" ")[0] not in ab_and_swell_set:  # Gu의 경우 177회 루프 예상. 1회 20분걸린다 치면
+        continue
+    if check_before_timeseries_data_contain_nan(index, values_df_outer):
+        continue
     print("----------------loop Num : ", num)
-    print(index)
     print(row)
     testEnd_time = dt.strptime(index, '%Y-%m-%d %H:%M')  # t
     testStart_time = (testEnd_time - timedelta(hours=4)).strftime('%Y-%m-%d %H:%M')  # t-4
@@ -263,7 +278,7 @@ for index, row in nan_retain_row.iterrows():
     val_X = X_val.reshape((X_val.shape[0], n_hours, n_features))
     val_Y = y_val.reshape((y_val.shape[0], 1, n_features))
     test_X = testX.reshape((1, n_hours, n_features))
-
+    """
 
     # n_batch = gcd(X_train.shape[0], X_val.shape[0])  # 일단 배치사이즈를 대충 결정.
     model = Sequential()
@@ -292,14 +307,14 @@ for index, row in nan_retain_row.iterrows():
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
-    # plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
-    # plt.plot(custom_hist.train_loss)
-    # plt.plot(custom_hist.val_loss)
-    # x_len = np.arange(len(custom_hist.val_loss))
-    # plt.ylabel('loss')
-    # plt.xlabel('epoch')
-    # plt.legend(['train_loss', 'val_loss'], loc='upper left')
-    # plt.show()
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    x_len = np.arange(len(custom_hist.val_loss))
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train_loss', 'val_loss'], loc='upper left')
+    plt.show()
 
     del model
     model = search_best_model(MODEL_DIR)
@@ -312,14 +327,14 @@ for index, row in nan_retain_row.iterrows():
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
-    # plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model2_loopNum' + str(num).zfill(2))
-    # plt.plot(custom_hist.train_loss)
-    # plt.plot(custom_hist.val_loss)
-    # x_len = np.arange(len(custom_hist.val_loss))
-    # plt.ylabel('loss')
-    # plt.xlabel('epoch')
-    # plt.legend(['train_loss', 'val_loss'], loc='upper left')
-    # plt.show()
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model2_loopNum' + str(num).zfill(2))
+    plt.plot(custom_hist.train_loss)
+    plt.plot(custom_hist.val_loss)
+    x_len = np.arange(len(custom_hist.val_loss))
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train_loss', 'val_loss'], loc='upper left')
+    plt.show()
 
     # x_hat = test_X
     # test_start_area_absolute_position = TrainXdf.index.get_loc(int(changeDateToStr(StartTestDate))).start
@@ -332,9 +347,13 @@ for index, row in nan_retain_row.iterrows():
     m, s = divmod((time.time() - start_time), 60)
     print("almost %d minute" % m)
     num += 1
-    # break
+    break
 
 print("\n about mse: %s" % mseList)
 print("mean mse %.7f:" % np.mean(mseList))
 
 values_df_outer.to_csv(scriptName + ' prediction.csv', encoding='utf-8')
+
+
+print(num)
+"""

@@ -68,7 +68,7 @@ dataset = scaler.fit_transform(dataset)
 # hyperparameter tuning section
 number_of_var = len(dataframe.columns)
 look_back = 25  # 기억력은 1달 일 전후라고 치자. timesteps다.
-forecast_ahead = 15
+forecast_ahead = 5
 num_epochs = 600
 # hyperparameter tuning section
 filename = os.path.basename(os.path.realpath(sys.argv[0]))
