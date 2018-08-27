@@ -135,7 +135,8 @@ test_dates_df.sort_index(inplace=True)  # 테스트할 데이터.
 test_dates = test_dates_df.index.values.flatten().tolist()
 
 # 데이터 불러오기
-X_df = pd.read_csv('GuRyoungPo_hour.csv', index_col=[0])
+# X_df = pd.read_csv('Pohang_hour.csv', index_col=[0])
+X_df = pd.read_csv('Pohang_hour_without_wind.csv', index_col=[0])
 X_df.sort_index(inplace=True)  # 데이터가 존재.
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜를 제외한 부분은 우선 확인
