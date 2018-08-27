@@ -493,10 +493,29 @@ print("ind_var_with_WallPo_withoutwind can't handle date : %s" % len(set(test_da
 # 1개 조합 : 4개. 이미 위에서 한거다.
 """
 
-GuRyoungPo_hour = pd.read_csv('.csv', index_col=[1])
+data_about_time_flatten = pd.read_csv('data_about_time_flatten.csv', index_col=[0])  # 시간에 따른 영향을 측정시 사용.
 
-WallPo_hour_15 = pd.read_csv('월포 시간별 파고부이 15년.csv', index_col=[1])
-WallPo_hour_15 = WallPo_hour_15.drop(columns=['지점'])
+GuRyoungPo_hour = pd.read_csv('flatten_lstm_Gu_interpolation.py prediction.csv', index_col=[0])
 
-Pohang_hour_14 = pd.read_csv('포항 시간별 해양기상부이 14년.csv', index_col=[1])
-Pohang_hour_14 = Pohang_hour_14.drop(columns=['지점'])
+WallPo_hour_after_20150925 = pd.read_csv('flatten_lstm_Wall_interpolation.py prediction.csv', index_col=[0])
+
+Pohang_hour = pd.read_csv('flatten_lstm_Po_interpolation.py prediction.csv', index_col=[0])
+
+Pohang_hour_withoutwind = pd.read_csv('flatten_lstm_Po_withoutwind_interpolation.py prediction.csv', index_col=[0])
+
+DateGuWallPo_fullJoin = pd.concat([data_about_time_flatten, GuRyoungPo_hour, Pohang_hour], axis=1, join='inner')
+DateGuWallPo_fullJoin.to_csv('DateGuWallPo_fullJoin.csv', encoding='utf-8')
+
+DateGuWallPo_fullJoin_after20150925 = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour_after_20150925, Pohang_hour], axis=1, join='inner')
+DateGuWallPo_fullJoin_after20150925.to_csv('DateGuWallPo_fullJoin_after20150925.csv', encoding='utf-8')
+
+DateGuWallPo_fullJoin_withoutwind = pd.concat([data_about_time_flatten, GuRyoungPo_hour, Pohang_hour_withoutwind], axis=1, join='inner')
+DateGuWallPo_fullJoin_withoutwind.to_csv('DateGuWallPo_fullJoin_withoutwind.csv', encoding='utf-8')  # 일단 이걸 먼저 쓰는게 나아 보인다.
+
+DateGuWallPo_fullJoin_after20150925_withoutwind = pd.concat([data_about_time_flatten, GuRyoungPo_hour, WallPo_hour_after_20150925, Pohang_hour_withoutwind], axis=1, join='inner')
+DateGuWallPo_fullJoin_after20150925_withoutwind.to_csv('DateGuWallPo_fullJoin_after20150925_withoutwind.csv', encoding='utf-8')  # 차선
+
+
+
+
+

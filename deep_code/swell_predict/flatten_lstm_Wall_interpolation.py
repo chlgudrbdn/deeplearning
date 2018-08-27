@@ -171,6 +171,7 @@ Y_df.sort_index(inplace=True)  # 혹시 몰라 정렬
 
 values_df_outer = pd.concat([X_df, Y_df], axis=1, join='outer', sort=True)
 values_df_outer = values_df_outer.drop(columns=['0'])  # 그 자체로 불안정하기 때문에(일단 test date에도 swell이 안일어난 것으로 해뒀음) 실제 데이터 분석하기 전엔 안 쓸 예정.
+values_df_outer = values_df_outer.loc['2015-09-25 13:00':]  # 그이전에 자료 하나가 있긴한데 계산이 번거로워지므로 그냥 여기서 부터 train 시작
 values_df_outer = values_df_outer.astype('float32')
 scaler = MinMaxScaler(feature_range=(0, 1))
 
@@ -273,8 +274,8 @@ for index, row in nan_retain_row.iterrows():
     model.add(Dropout(0.3))
     model.add(LSTM(n_features, batch_input_shape=(1, n_hours, n_features), stateful=True))
     model.add(Dense(n_features))
-    model.add(Activation("linear"))
-    # model.add(Activation("relu"))
+    # model.add(Activation("linear"))
+    model.add(Activation("relu"))
     model.compile(loss='mse', optimizer='adam')
 
     # 모델 저장 폴더 만들기
@@ -292,14 +293,14 @@ for index, row in nan_retain_row.iterrows():
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
-    plt.plot(custom_hist.train_loss)
-    plt.plot(custom_hist.val_loss)
-    x_len = np.arange(len(custom_hist.val_loss))
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train_loss', 'val_loss'], loc='upper left')
-    plt.show()
+    # plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
+    # plt.plot(custom_hist.train_loss)
+    # plt.plot(custom_hist.val_loss)
+    # x_len = np.arange(len(custom_hist.val_loss))
+    # plt.ylabel('loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['train_loss', 'val_loss'], loc='upper left')
+    # plt.show()
 
     del model
     model = search_best_model(MODEL_DIR)
@@ -312,14 +313,14 @@ for index, row in nan_retain_row.iterrows():
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model2_loopNum' + str(num).zfill(2))
-    plt.plot(custom_hist.train_loss)
-    plt.plot(custom_hist.val_loss)
-    x_len = np.arange(len(custom_hist.val_loss))
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train_loss', 'val_loss'], loc='upper left')
-    plt.show()
+    # plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model2_loopNum' + str(num).zfill(2))
+    # plt.plot(custom_hist.train_loss)
+    # plt.plot(custom_hist.val_loss)
+    # x_len = np.arange(len(custom_hist.val_loss))
+    # plt.ylabel('loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['train_loss', 'val_loss'], loc='upper left')
+    # plt.show()
 
     # x_hat = test_X
     # test_start_area_absolute_position = TrainXdf.index.get_loc(int(changeDateToStr(StartTestDate))).start

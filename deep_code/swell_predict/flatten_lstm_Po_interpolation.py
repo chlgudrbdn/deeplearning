@@ -274,8 +274,8 @@ for index, row in nan_retain_row.iterrows():
     model.add(Dropout(0.3))
     model.add(LSTM(n_features, batch_input_shape=(1, n_hours, n_features), stateful=True))
     model.add(Dense(n_features))
-    model.add(Activation("linear"))
-    # model.add(Activation("relu"))
+    # model.add(Activation("linear"))
+    model.add(Activation("relu"))
     model.compile(loss='mse', optimizer='adam')
 
     # 모델 저장 폴더 만들기
@@ -293,14 +293,14 @@ for index, row in nan_retain_row.iterrows():
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
-    plt.plot(custom_hist.train_loss)
-    plt.plot(custom_hist.val_loss)
-    x_len = np.arange(len(custom_hist.val_loss))
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train_loss', 'val_loss'], loc='upper left')
-    plt.show()
+    # plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
+    # plt.plot(custom_hist.train_loss)
+    # plt.plot(custom_hist.val_loss)
+    # x_len = np.arange(len(custom_hist.val_loss))
+    # plt.ylabel('loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['train_loss', 'val_loss'], loc='upper left')
+    # plt.show()
 
     del model
     model = search_best_model(MODEL_DIR)
@@ -313,14 +313,14 @@ for index, row in nan_retain_row.iterrows():
                   callbacks=[custom_hist, checkpointer])
         model.reset_states()
 
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model2_loopNum' + str(num).zfill(2))
-    plt.plot(custom_hist.train_loss)
-    plt.plot(custom_hist.val_loss)
-    x_len = np.arange(len(custom_hist.val_loss))
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train_loss', 'val_loss'], loc='upper left')
-    plt.show()
+    # plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model2_loopNum' + str(num).zfill(2))
+    # plt.plot(custom_hist.train_loss)
+    # plt.plot(custom_hist.val_loss)
+    # x_len = np.arange(len(custom_hist.val_loss))
+    # plt.ylabel('loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['train_loss', 'val_loss'], loc='upper left')
+    # plt.show()
 
     # x_hat = test_X
     # test_start_area_absolute_position = TrainXdf.index.get_loc(int(changeDateToStr(StartTestDate))).start
