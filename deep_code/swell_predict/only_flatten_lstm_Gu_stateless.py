@@ -20,6 +20,7 @@ import pandas as pd
 import numpy as np
 from math import sqrt
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 
 import time
 start_time = time.time()
@@ -60,21 +61,6 @@ def create_dataset(dataset, look_back=1):
 
 def score_calculating(true_value, pred_value):
     Score = 0
-    # for i in range(true_value.shape[0]):  # 일단은 0행을 가정.
-    #     for j in range(true_value.shape[1]):
-    #         if true_value[i][j] == 0:
-    #             if true_value[i][j] == pred_value[i][j]:
-    #                 Score = Score + 1
-    #             else:
-    #                 Score = Score - 1
-    #         else:
-    #             # print(true_value[i][j], ":", pred_value[i][j], end=",")
-    #             if true_value[i][j] == pred_value[i][j]:
-    #                 Score = Score + 2
-    #             else:
-    #                 Score = Score - 2
-    # print(true_value)
-    # print(pred_value)
     for i in range(len(true_value)):
         if true_value[i] == 0:
             if true_value[i] == pred_value[i]:
@@ -209,10 +195,10 @@ values_df_outer = values_df_outer.astype('float32')
 scaler = MinMaxScaler(feature_range=(0, 1))
 
 # hyperParameter
-epochs = 2
-# epochs = 300
-patience_num = 2
-# patience_num = 50
+# epochs = 2
+epochs = 300
+# patience_num = 2
+patience_num = 50
 n_hours = 4  # 일단 예측해야하는 날 사이 최소 11일 정도 간격 차이가 있다. 44개의 데이터로 어떻게든 학습하던가 아니면 보간된 걸로 어떻게든 해본다던가.
 n_features = len(values_df_outer.columns)  # 5
 ###############
@@ -280,6 +266,7 @@ print("not_enough_data_cnt at train: ", not_enough_data_cnt)
 
 not_enough_data_cnt = 0
 not_enough_data_date_time = []
+enough_data_date_time = []
 X_test = []
 for index, row in X_df.loc[test_dates_in_X_df].iterrows():  # filter train and validation able part
     if check_before_timeseries_data_contain_nan(index, values_df_outer, n_hours):
@@ -288,83 +275,121 @@ for index, row in X_df.loc[test_dates_in_X_df].iterrows():  # filter train and v
         continue
     if len(X_test) == 0:
         X_test = np.asarray([find_before_n_step(index, values_df_outer, n_hours).values])
+        enough_data_date_time.append(index)
         continue
     X_test = np.append(X_test, np.asarray([find_before_n_step(index, values_df_outer, n_hours).values]), axis=0)
+    enough_data_date_time.append(index)
 
 X_test = X_test.reshape((X_test.shape[0], n_hours, n_features))
 print("not_enough_data_cnt at test : ", not_enough_data_cnt)
+print("not_enough_data date and time at test : ", not_enough_data_date_time)
+print("enough_data_cnt at test : ", len(enough_data_date_time))
 
-n_fold = 10
-kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
+# n_fold = 10
+# kf = KFold(n_splits=n_fold, shuffle=True, random_state=seed)
 
 num = 1
 lossList = []
 scoreList = []
 accuracyList = []
 first_memory_cell_num = int(n_features*(n_features-1)/2)
-for train_index, validation_index in kf.split(X_train_and_validation):  # 이하 모델을 학습한 뒤 테스트.
-    print("----------------------------loop num : ", len(lossList)+1)
-    print("TRAIN: %d" % len(train_index), "VAL: %d" % len(validation_index))
-    X_train, X_val = X_train_and_validation[train_index], X_train_and_validation[validation_index]
-    y_train, y_val = Y_train_and_validation[train_index], Y_train_and_validation[validation_index]
-    # design network
-    model = Sequential()
-    model.add(LSTM(first_memory_cell_num, input_shape=(X_train.shape[1], X_train.shape[2])))
-    edge_num = 2
-    # model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
-    while int(first_memory_cell_num * (edge_num**(-2))) >= 5 and edge_num < 6:
-        model.add(Dense(int(first_memory_cell_num * (edge_num**(-2))), kernel_initializer='random_normal'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(Dropout(0.2))
-        print("memory cell cnt : ", int(first_memory_cell_num * (edge_num**(-2))))
-        edge_num += 1
-    model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    # fit network
-    n_batchs = gcd(X_train.shape[0], X_val.shape[0])
-    print("n_batchs", n_batchs)
-    MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(lossList)).zfill(2)+'/'
-    if not os.path.exists(MODEL_DIR):
-        os.mkdir(MODEL_DIR)
-    modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
-    # 모델 업데이트 및 저장
-    checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
-    # 학습 자동 중단 설정
-    early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
+# for train_index, validation_index in kf.split(X_train_and_validation):  # 이하 모델을 학습한 뒤 테스트.
+X_train, X_val, y_train, y_val = train_test_split(X_train_and_validation, Y_train_and_validation, test_size=0.1, random_state=seed)
+# X_train, X_val = X_train_and_validation[train_index], X_train_and_validation[validation_index]
+# y_train, y_val = Y_train_and_validation[train_index], Y_train_and_validation[validation_index]
+# design network
+model = Sequential()
+model.add(LSTM(first_memory_cell_num, input_shape=(X_train.shape[1], X_train.shape[2])))
+edge_num = 2
+# model.add(Dense(int(first_layer_node_cnt * (edge_num**(-2))), activation='relu'))
+while int(first_memory_cell_num * (edge_num**(-2))) >= 5 and edge_num < 6:
+    model.add(Dense(int(first_memory_cell_num * (edge_num**(-2))), kernel_initializer='random_normal'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Dropout(0.2))
+    print("memory cell cnt : ", int(first_memory_cell_num * (edge_num**(-2))))
+    edge_num += 1
+model.add(Dense(1, activation='sigmoid'))
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+# fit network
+n_batchs = gcd(X_train.shape[0], X_val.shape[0])
+print("n_batchs", n_batchs)
+MODEL_DIR = './'+scriptName+' model_loopNum'+str(len(lossList)).zfill(2)+'/'
+if not os.path.exists(MODEL_DIR):
+    os.mkdir(MODEL_DIR)
+modelpath = MODEL_DIR+"{val_loss:.9f}.hdf5"
+# 모델 업데이트 및 저장
+checkpointer = ModelCheckpoint(filepath=modelpath, monitor='val_loss', verbose=0, save_best_only=True)
+# 학습 자동 중단 설정
+early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
 
-    history = model.fit(X_train, y_train, epochs=epochs, batch_size=n_batchs, validation_data=(X_val, y_val), verbose=0,
-                        callbacks=[checkpointer, early_stopping_callback])
-    # plot history
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model_loopNum' + str(len(lossList)).zfill(2))
-    # 테스트 셋의 오차
-    y_acc = history.history['acc']
-    y_vacc = history.history['val_acc']
-    y_loss = history.history['loss']
-    y_vloss = history.history['val_loss']
-    # 그래프로 표현
-    x_len = np.arange(len(y_loss))
-    plt.plot(x_len, y_acc, c="blue", label='acc')
-    plt.plot(x_len, y_vacc, c="red", label='val_acc')
-    plt.plot(x_len, y_loss, c="green", label='loss')
-    plt.plot(x_len, y_vloss, c="orange", label='val_loss')
+history = model.fit(X_train, y_train, epochs=epochs, batch_size=n_batchs, validation_data=(X_val, y_val), verbose=0,
+                    callbacks=[checkpointer, early_stopping_callback])
+# plot history
+plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model_loopNum' + str(1).zfill(2))
+# 테스트 셋의 오차
+y_acc = history.history['acc']
+y_vacc = history.history['val_acc']
+y_loss = history.history['loss']
+y_vloss = history.history['val_loss']
+# 그래프로 표현
+x_len = np.arange(len(y_loss))
+plt.plot(x_len, y_acc, c="blue", label='acc')
+plt.plot(x_len, y_vacc, c="red", label='val_acc')
+plt.plot(x_len, y_loss, c="green", label='loss')
+plt.plot(x_len, y_vloss, c="orange", label='val_loss')
+plt.show()
 
-    del model
-    model = search_best_model(MODEL_DIR)
-    evalScore = model.evaluate(X_val, y_val, batch_size=len(X_val))
-    lossList.append(evalScore[0])
-    accuracyList.append(evalScore[1])
+del model
+model = search_best_model(MODEL_DIR)
+evalScore = model.evaluate(X_val, y_val, batch_size=len(X_val))
+lossList.append(evalScore[0])
+accuracyList.append(evalScore[1])
 
-    prediction = np.where(model.predict(X_val, batch_size=len(X_val)) < 0.5, 0, 1)
+prediction = np.where(model.predict(X_val, batch_size=len(X_val)) < 0.5, 0, 1)
 
-    score = score_calculating(y_val.flatten().tolist(), prediction.flatten().tolist())
-    scoreList.append(score)
-    print('Test score: %.3f' % score)
-    m, s = divmod((time.time() - start_time), 60)  # epoch2에 10바퀴 루프 13분정도 걸린다. 게다가 2번만 했는데도 제법 높은 퍼포먼스 보임. 50epoch면 어떨까?
-    print("almost %2f minute" % m)
-    # break
+score = score_calculating(y_val.flatten().tolist(), prediction.flatten().tolist())
+scoreList.append(score)
 
-print("\n %.f fold accuracy:" % n_fold, accuracyList)
+history = model.fit(X_val, y_val, epochs=epochs, batch_size=n_batchs, validation_data=(X_train, y_train), verbose=0,
+                    callbacks=[checkpointer, early_stopping_callback])
+plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model_loopNum' + str(2).zfill(2))
+# 테스트 셋의 오차
+y_acc = history.history['acc']
+y_vacc = history.history['val_acc']
+y_loss = history.history['loss']
+y_vloss = history.history['val_loss']
+# 그래프로 표현
+x_len = np.arange(len(y_loss))
+plt.plot(x_len, y_acc, c="blue", label='acc')
+plt.plot(x_len, y_vacc, c="red", label='val_acc')
+plt.plot(x_len, y_loss, c="green", label='loss')
+plt.plot(x_len, y_vloss, c="orange", label='val_loss')
+plt.show()
+
+del model
+model = search_best_model(MODEL_DIR)
+evalScore = model.evaluate(X_val, y_val, batch_size=len(X_val))
+lossList.append(evalScore[0])
+accuracyList.append(evalScore[1])
+
+prediction = np.where(model.predict(X_val, batch_size=len(X_val)) < 0.5, 0, 1)
+
+score = score_calculating(y_val.flatten().tolist(), prediction.flatten().tolist())
+scoreList.append(score)
+
+forecast = np.where(model.predict(X_test, batch_size=len(X_val)) < 0.5, 0, 1)
+forecast_df = pd.DataFrame(data=forecast.astype('int32'), index=enough_data_date_time)
+forecast_df_join_outer = pd.concat([test_dates_df, forecast_df], axis=1, join='outer', sort=True)  # 마지막에 Y값을 붙임. colum 명은 0이 됨.
+forecast_df_join_outer = forecast_df_join_outer.drop(columns=['Unnamed: 0'])
+print("not enough data datetime", set(test_dates) - set(X_df.index.values))  # 예측해야할 날짜에 자료가 없는 시간.
+print(len(set(test_dates) - set(X_df.index.values)))  # 예측해야할 날짜에 자료가 없는 시간.
+
+print('Test score: %.d' % score)
+m, s = divmod((time.time() - start_time), 60)  # epoch2에 10바퀴 루프 13분정도 걸린다. 게다가 2번만 했는데도 제법 높은 퍼포먼스 보임. 50epoch면 어떨까?
+print("almost %d minute" % m)
+
+print("\n fold accuracy:", accuracyList)
 accuracyList = [float(j) for j in accuracyList]
 print("mean accuracy %.7f:" % np.mean(accuracyList))
 print("score : %s" % scoreList)
@@ -372,5 +397,6 @@ print("mean score : %.4f" % np.mean(scoreList))
 print("val loss : %s" % lossList)
 print("mean val loss : %.4f" % np.mean(lossList))
 
+forecast_df_join_outer.to_csv(scriptName + 'forecast_df.csv', encoding='utf-8')
 
 
