@@ -150,7 +150,7 @@ test_dates_df.sort_index(inplace=True)  # 테스트할 데이터.
 test_dates = test_dates_df.index.values.flatten().tolist()
 
 # 데이터 불러오기
-X_df = pd.read_csv('GuRyoungPo_hour.csv', index_col=[0])
+X_df = pd.read_csv('ind_var_with_DateGu.csv', index_col=[0])
 X_df.sort_index(inplace=True)  # 데이터가 존재.
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
@@ -336,7 +336,7 @@ for train_index, validation_index in kf.split(X_train_and_validation):  # 이하
     history = model.fit(X_train, y_train, epochs=epochs, batch_size=n_batchs, validation_data=(X_val, y_val), verbose=0,
                         callbacks=[checkpointer, early_stopping_callback])
     # plot history
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model_loopNum' + str(len(lossList)).zfill(2))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
     # 테스트 셋의 오차
     y_acc = history.history['acc']
     y_vacc = history.history['val_acc']

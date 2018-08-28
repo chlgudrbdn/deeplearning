@@ -60,21 +60,6 @@ def create_dataset(dataset, look_back=1):
 
 def score_calculating(true_value, pred_value):
     Score = 0
-    # for i in range(true_value.shape[0]):  # 일단은 0행을 가정.
-    #     for j in range(true_value.shape[1]):
-    #         if true_value[i][j] == 0:
-    #             if true_value[i][j] == pred_value[i][j]:
-    #                 Score = Score + 1
-    #             else:
-    #                 Score = Score - 1
-    #         else:
-    #             # print(true_value[i][j], ":", pred_value[i][j], end=",")
-    #             if true_value[i][j] == pred_value[i][j]:
-    #                 Score = Score + 2
-    #             else:
-    #                 Score = Score - 2
-    # print(true_value)
-    # print(pred_value)
     for i in range(len(true_value)):
         if true_value[i] == 0:
             if true_value[i] == pred_value[i]:
@@ -150,7 +135,7 @@ test_dates_df.sort_index(inplace=True)  # 테스트할 데이터.
 test_dates = test_dates_df.index.values.flatten().tolist()
 
 # 데이터 불러오기
-X_df = pd.read_csv('GuRyoungPo_hour.csv', index_col=[0])
+X_df = pd.read_csv('ind_var_with_DateGuWall.csv', index_col=[0])
 X_df.sort_index(inplace=True)  # 데이터가 존재.
 
 X_df_index = set(list(X_df.index.values)) - set(test_dates)  # 제출해야할 날짜는 우선적으로 뺀다.
@@ -336,7 +321,7 @@ for train_index, validation_index in kf.split(X_train_and_validation):  # 이하
     history = model.fit(X_train, y_train, epochs=epochs, batch_size=n_batchs, validation_data=(X_val, y_val), verbose=0,
                         callbacks=[checkpointer, early_stopping_callback])
     # plot history
-    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model_loopNum' + str(len(lossList)).zfill(2))
+    plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model1_loopNum' + str(num).zfill(2))
     # 테스트 셋의 오차
     y_acc = history.history['acc']
     y_vacc = history.history['val_acc']
@@ -360,7 +345,7 @@ for train_index, validation_index in kf.split(X_train_and_validation):  # 이하
     score = score_calculating(y_val.flatten().tolist(), prediction.flatten().tolist())
     scoreList.append(score)
     print('Test score: %.3f' % score)
-    m, s = divmod((time.time() - start_time), 60)  # epoch2에 10바퀴 루프 13분정도 걸린다. 게다가 2번만 했는데도 제법 높은 퍼포먼스 보임. 50epoch면 어떨까?
+    m, s = divmod((time.time() - start_time), 60)  # epoch2에 10바퀴 루프 한번당 1분정도 걸린다. 게다가 2번만 했는데도 제법 높은 퍼포먼스 보임.
     print("almost %2f minute" % m)
     # break
 
@@ -369,8 +354,4 @@ accuracyList = [float(j) for j in accuracyList]
 print("mean accuracy %.7f:" % np.mean(accuracyList))
 print("score : %s" % scoreList)
 print("mean score : %.4f" % np.mean(scoreList))
-print("val loss : %s" % lossList)
-print("mean val loss : %.4f" % np.mean(lossList))
-
-
 
