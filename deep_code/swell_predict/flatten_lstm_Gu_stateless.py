@@ -25,6 +25,59 @@ import time
 start_time = time.time()
 
 
+def recall(y_target, y_pred):
+    # clip(t, clip_value_min, clip_value_max) : clip_value_min~clip_value_max 이외 가장자리를 깎아 낸다
+    # round : 반올림한다
+    y_target_yn = K.round(K.clip(y_target, 0, 1))  # 실제값을 0(Negative) 또는 1(Positive)로 설정한다
+    y_pred_yn = K.round(K.clip(y_pred, 0, 1))  # 예측값을 0(Negative) 또는 1(Positive)로 설정한다
+
+    # True Positive는 실제 값과 예측 값이 모두 1(Positive)인 경우이다
+    count_true_positive = K.sum(y_target_yn * y_pred_yn)
+
+    # (True Positive + False Negative) = 실제 값이 1(Positive) 전체
+    count_true_positive_false_negative = K.sum(y_target_yn)
+
+    # Recall =  (True Positive) / (True Positive + False Negative)
+    # K.epsilon()는 'divide by zero error' 예방차원에서 작은 수를 더한다
+    recall = count_true_positive / (count_true_positive_false_negative + K.epsilon())
+
+    # return a single tensor value
+    return recall
+
+
+def precision(y_target, y_pred):
+    # clip(t, clip_value_min, clip_value_max) : clip_value_min~clip_value_max 이외 가장자리를 깎아 낸다
+    # round : 반올림한다
+    y_pred_yn = K.round(K.clip(y_pred, 0, 1))  # 예측값을 0(Negative) 또는 1(Positive)로 설정한다
+    y_target_yn = K.round(K.clip(y_target, 0, 1))  # 실제값을 0(Negative) 또는 1(Positive)로 설정한다
+
+    # True Positive는 실제 값과 예측 값이 모두 1(Positive)인 경우이다
+    count_true_positive = K.sum(y_target_yn * y_pred_yn)
+
+    # (True Positive + False Positive) = 예측 값이 1(Positive) 전체
+    count_true_positive_false_positive = K.sum(y_pred_yn)
+
+    # Precision = (True Positive) / (True Positive + False Positive)
+    # K.epsilon()는 'divide by zero error' 예방차원에서 작은 수를 더한다
+    precision = count_true_positive / (count_true_positive_false_positive + K.epsilon())
+
+    # return a single tensor value
+    return precision
+
+
+def f1score(y_target, y_pred):
+    _recall = recall(y_target, y_pred)
+    _precision = precision(y_target, y_pred)
+    # K.epsilon()는 'divide by zero error' 예방차원에서 작은 수를 더한다
+    _f1score = (2 * _recall * _precision) / (_recall + _precision + K.epsilon())
+
+    # return a single tensor value
+    return _f1score
+
+# http://blog.naver.com/PostView.nhn?blogId=wideeyed&logNo=221226716255
+# [출처][Keras] 2.0에서 precision, recall 사용하기 | 작성자 똑똑이
+
+
 # convert series to supervised learning  # data는 dataframe을 의미
 def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):  # n_out은 후행지표가 있을 수도 있다고 판단해서인거 같다.
     n_vars = 1 if type(data) is list else data.shape[1]
@@ -209,10 +262,10 @@ values_df_outer = values_df_outer.astype('float32')
 scaler = MinMaxScaler(feature_range=(0, 1))
 
 # hyperParameter
-epochs = 2
-# epochs = 300
-patience_num = 2
-# patience_num = 50
+# epochs = 2
+epochs = 300
+# patience_num = 2
+patience_num = 50
 n_hours = 4  # 일단 예측해야하는 날 사이 최소 11일 정도 간격 차이가 있다. 44개의 데이터로 어떻게든 학습하던가 아니면 보간된 걸로 어떻게든 해본다던가.
 n_features = len(values_df_outer.columns)  # 5
 ###############
@@ -320,7 +373,7 @@ for train_index, validation_index in kf.split(X_train_and_validation):  # 이하
         print("memory cell cnt : ", int(first_memory_cell_num * (edge_num**(-2))))
         edge_num += 1
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', recall, precision])
     # fit network
     n_batchs = gcd(X_train.shape[0], X_val.shape[0])
     print("n_batchs", n_batchs)
@@ -333,7 +386,7 @@ for train_index, validation_index in kf.split(X_train_and_validation):  # 이하
     # 학습 자동 중단 설정
     early_stopping_callback = EarlyStopping(monitor='val_loss', patience=patience_num)
 
-    history = model.fit(X_train, y_train, epochs=epochs, batch_size=n_batchs, validation_data=(X_val, y_val), verbose=0,
+    history = model.fit(X_train, y_train, epochs=epochs, batch_size=n_batchs, validation_data=(X_val, y_val), verbose=2,
                         callbacks=[checkpointer, early_stopping_callback])
     # plot history
     plt.figure(figsize=(8, 8)).canvas.set_window_title(scriptName + ' model_loopNum' + str(len(lossList)).zfill(2))
